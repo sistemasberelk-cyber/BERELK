@@ -28,8 +28,12 @@
                     <td>{{ client.email or '-' }}</td>
                     <td>{{ client.address or '-' }}</td>
                     <td>
-                        <button class="btn"
+                        <button
+                            onclick="editClient('{{client.id}}', '{{client.name}}', '{{client.phone}}', '{{client.email}}', '{{client.address}}')"
+                            class="btn"
                             style="padding: 4px 8px; font-size: 0.8rem; background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color);">Editar</button>
+                        <button onclick="deleteClient('{{client.id}}')" class="btn"
+                            style="padding: 4px 8px; font-size: 0.8rem; background: transparent; border: 1px solid #ef4444; color: #ef4444; margin-left: 8px;">Eliminar</button>
                     </td>
                 </tr>
                 {% else %}
@@ -46,19 +50,21 @@
 <div id="client-modal"
     style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 100; justify-content: center; align-items: center;">
     <div class="glass-card" style="width: 100%; max-width: 500px; background: white;">
-        <h3 style="margin-bottom: 24px;">Nuevo Cliente</h3>
-        <form action="/api/clients" method="post" onsubmit="submitClient(event)">
+        <h3 id="modal-title" style="margin-bottom: 24px;">Nuevo Cliente</h3>
+        <form id="client-form" onsubmit="submitClient(event)">
+            <input type="hidden" id="edit-id" name="id">
+
             <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre Completo</label>
-            <input type="text" name="name" required placeholder="Juan Pérez">
+            <input type="text" id="c-name" name="name" required placeholder="Juan Pérez">
 
             <label style="display: block; margin-bottom: 8px; font-weight: 500;">Teléfono</label>
-            <input type="text" name="phone" placeholder="+506 8888-8888">
+            <input type="text" id="c-phone" name="phone" placeholder="+506 8888-8888">
 
             <label style="display: block; margin-bottom: 8px; font-weight: 500;">Email</label>
-            <input type="email" name="email" placeholder="juan@ejemplo.com">
+            <input type="email" id="c-email" name="email" placeholder="juan@ejemplo.com">
 
             <label style="display: block; margin-bottom: 8px; font-weight: 500;">Dirección</label>
-            <input type="text" name="address" placeholder="San José, Costa Rica">
+            <input type="text" id="c-address" name="address" placeholder="San José, Costa Rica">
 
             <div style="margin-top: 24px; text-align: right;">
                 <button type="button" onclick="closeModal()" class="btn"
@@ -70,27 +76,47 @@
 </div>
 
 <script>
-    function openModal() { document.getElementById('client-modal').style.display = 'flex'; }
+    function openModal() {
+        document.getElementById('client-modal').style.display = 'flex';
+        document.getElementById('client-form').reset();
+        document.getElementById('edit-id').value = '';
+        document.getElementById('modal-title').innerText = 'Nuevo Cliente';
+    }
     function closeModal() { document.getElementById('client-modal').style.display = 'none'; }
+
+    function editClient(id, name, phone, email, address) {
+        document.getElementById('client-modal').style.display = 'flex';
+        document.getElementById('modal-title').innerText = 'Editar Cliente';
+        document.getElementById('edit-id').value = id;
+        document.getElementById('c-name').value = name;
+        document.getElementById('c-phone').value = phone === 'None' ? '' : phone;
+        document.getElementById('c-email').value = email === 'None' ? '' : email;
+        document.getElementById('c-address').value = address === 'None' ? '' : address;
+    }
+
+    async function deleteClient(id) {
+        if (!confirm('¿Estás seguro de eliminar este cliente?')) return;
+        try {
+            const res = await fetch(`/api/clients/${id}`, { method: 'DELETE' });
+            if (res.ok) window.location.reload();
+            else alert('Error al eliminar');
+        } catch (e) { alert('Error de conexión'); }
+    }
 
     async function submitClient(e) {
         e.preventDefault();
+        const id = document.getElementById('edit-id').value;
         const form = e.target;
         const formData = new FormData(form);
 
+        const url = id ? `/api/clients/${id}` : '/api/clients';
+        const method = id ? 'PUT' : 'POST';
+
         try {
-            const res = await fetch('/api/clients', {
-                method: 'POST',
-                body: formData
-            });
-            if (res.ok) {
-                window.location.reload();
-            } else {
-                alert("Error al guardar");
-            }
-        } catch (err) {
-            alert("Error de conexión");
-        }
+            const res = await fetch(url, { method: method, body: formData });
+            if (res.ok) window.location.reload();
+            else alert("Error al guardar");
+        } catch (err) { alert("Error de conexión"); }
     }
 </script>
 {% endblock %}

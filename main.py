@@ -45,13 +45,12 @@ def require_auth(request: Request, user: Optional[User] = Depends(get_current_us
     return user
 
 def get_settings(session: Session = Depends(get_session)) -> Settings:
-    # Always return the first settings row (created on startup)
+    # Always return the first settings row
     return session.exec(select(Settings)).first()
 
 # --- Auth Routes ---
 
 from starlette.middleware.sessions import SessionMiddleware
-# IMPORTANT: Change 'secret-key' in production to a random string!
 app.add_middleware(SessionMiddleware, secret_key="super-secret-nexpos-key")
 
 @app.get("/login", response_class=HTMLResponse)
@@ -59,17 +58,10 @@ def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
 
 @app.post("/login")
-def login(
-    request: Request, 
-    username: str = Form(...), 
-    password: str = Form(...),
-    session: Session = Depends(get_session)
-):
+def login(request: Request, username: str = Form(...), password: str = Form(...), session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.username == username)).first()
     if not user or not AuthService.verify_password(password, user.password_hash):
         return templates.TemplateResponse("login.html", {"request": request, "error": "Credenciales inválidas"})
-    
-    # Login Success
     request.session["user_id"] = user.id
     return RedirectResponse("/", status_code=302)
 
@@ -81,127 +73,55 @@ def logout(request: Request):
 # --- App Routes (Protected) ---
 
 @app.get("/", response_class=HTMLResponse)
-def get_dashboard(
-    request: Request, 
-    user: User = Depends(require_auth), 
-    settings: Settings = Depends(get_settings),
-    session: Session = Depends(get_session)
-):
+def get_dashboard(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
     total_products = session.exec(select(func.count(Product.id))).one()
     low_stock = session.exec(select(func.count(Product.id)).where(Product.stock_quantity < Product.min_stock_level)).one()
     recent_sales = session.exec(select(Sale).order_by(Sale.timestamp.desc()).limit(5)).all()
     
-    return templates.TemplateResponse(
-        "dashboard.html", 
-        {
-            "request": request,
-            "active_page": "home",
-            "settings": settings,
-            "user": user,
-            "total_products": total_products,
-            "low_stock": low_stock,
-            "recent_sales": recent_sales
-        }
-    )
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request, "active_page": "home", "settings": settings, "user": user,
+        "total_products": total_products, "low_stock": low_stock, "recent_sales": recent_sales
+    })
 
 @app.get("/pos", response_class=HTMLResponse)
-def get_pos(
-    request: Request, 
-    user: User = Depends(require_auth), 
-    settings: Settings = Depends(get_settings)
-):
-    return templates.TemplateResponse(
-        "pos.html", 
-        {"request": request, "active_page": "pos", "settings": settings, "user": user}
-    )
+def get_pos(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings)):
+    return templates.TemplateResponse("pos.html", {"request": request, "active_page": "pos", "settings": settings, "user": user})
 
 @app.get("/products", response_class=HTMLResponse)
-def get_products_page(
-    request: Request, 
-    user: User = Depends(require_auth), 
-    settings: Settings = Depends(get_settings),
-    session: Session = Depends(get_session)
-):
+def get_products_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
     products = session.exec(select(Product)).all()
-    return templates.TemplateResponse(
-        "products.html", 
-        {"request": request, "active_page": "products", "settings": settings, "user": user, "products": products}
-    )
+    return templates.TemplateResponse("products.html", {"request": request, "active_page": "products", "settings": settings, "user": user, "products": products})
 
 @app.get("/clients", response_class=HTMLResponse)
-def get_clients_page(
-    request: Request, 
-    user: User = Depends(require_auth), 
-    settings: Settings = Depends(get_settings),
-    session: Session = Depends(get_session)
-):
+def get_clients_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
     clients = session.exec(select(Client)).all()
-    return templates.TemplateResponse(
-        "clients.html", 
-        {"request": request, "active_page": "clients", "settings": settings, "user": user, "clients": clients}
-    )
+    return templates.TemplateResponse("clients.html", {"request": request, "active_page": "clients", "settings": settings, "user": user, "clients": clients})
 
 @app.get("/settings", response_class=HTMLResponse)
-def get_settings_page(
-    request: Request, 
-    user: User = Depends(require_auth), 
-    settings: Settings = Depends(get_settings)
-):
-    return templates.TemplateResponse(
-        "settings.html", 
-        {"request": request, "active_page": "settings", "settings": settings, "user": user}
-    )
+def get_settings_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings)):
+    return templates.TemplateResponse("settings.html", {"request": request, "active_page": "settings", "settings": settings, "user": user})
 
 @app.post("/settings")
-async def update_settings(
-    request: Request,
-    company_name: str = Form(...),
-    logo_file: Optional[UploadFile] = File(None),
-    settings: Settings = Depends(get_settings),
-    session: Session = Depends(get_session),
-    user: User = Depends(require_auth)
-):
+async def update_settings(request: Request, company_name: str = Form(...), logo_file: Optional[UploadFile] = File(None), settings: Settings = Depends(get_settings), session: Session = Depends(get_session), user: User = Depends(require_auth)):
     settings.company_name = company_name
-    
     if logo_file and logo_file.filename:
-        # Save new logo
         file_location = f"static/images/{logo_file.filename}"
         with open(file_location, "wb") as buffer:
             shutil.copyfileobj(logo_file.file, buffer)
         settings.logo_url = f"/{file_location}"
-        
     session.add(settings)
     session.commit()
     return RedirectResponse("/settings", status_code=302)
 
 # --- API Endpoints ---
 
-@app.post("/api/clients")
-def create_client_api(
-    name: str = Form(...),
-    phone: Optional[str] = Form(None),
-    email: Optional[str] = Form(None),
-    address: Optional[str] = Form(None),
-    session: Session = Depends(get_session),
-    user: User = Depends(require_auth)
-):
-    client = Client(name=name, phone=phone, email=email, address=address)
-    session.add(client)
-    session.commit()
-    return client
-
+# --- Products ---
 @app.get("/api/products")
 def get_products_api(session: Session = Depends(get_session), user: User = Depends(require_auth)):
     return session.exec(select(Product)).all()
 
 @app.post("/api/products")
-def create_product_api(
-    name: str = Form(...),
-    price: float = Form(...),
-    stock: int = Form(...),
-    session: Session = Depends(get_session),
-    user: User = Depends(require_auth)
-):
+def create_product_api(name: str = Form(...), price: float = Form(...), stock: int = Form(...), session: Session = Depends(get_session), user: User = Depends(require_auth)):
     product = Product(name=name, price=price, stock_quantity=stock, barcode="")
     session.add(product)
     session.commit()
@@ -211,12 +131,56 @@ def create_product_api(
     session.commit()
     return product
 
+@app.put("/api/products/{id}")
+def update_product_api(id: int, name: str = Form(...), price: float = Form(...), stock: int = Form(...), session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    product = session.get(Product, id)
+    if not product: raise HTTPException(404, "Not found")
+    product.name = name
+    product.price = price
+    product.stock_quantity = stock
+    session.add(product)
+    session.commit()
+    return product
+
+@app.delete("/api/products/{id}")
+def delete_product_api(id: int, session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    product = session.get(Product, id)
+    if not product: raise HTTPException(404, "Not found")
+    session.delete(product)
+    session.commit()
+    return {"ok": True}
+
+# --- Clients ---
+@app.post("/api/clients")
+def create_client_api(name: str = Form(...), phone: Optional[str] = Form(None), email: Optional[str] = Form(None), address: Optional[str] = Form(None), session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    client = Client(name=name, phone=phone, email=email, address=address)
+    session.add(client)
+    session.commit()
+    return client
+
+@app.put("/api/clients/{id}")
+def update_client_api(id: int, name: str = Form(...), phone: Optional[str] = Form(None), email: Optional[str] = Form(None), address: Optional[str] = Form(None), session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    client = session.get(Client, id)
+    if not client: raise HTTPException(404, "Not found")
+    client.name = name
+    client.phone = phone
+    client.email = email
+    client.address = address
+    session.add(client)
+    session.commit()
+    return client
+
+@app.delete("/api/clients/{id}")
+def delete_client_api(id: int, session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    client = session.get(Client, id)
+    if not client: raise HTTPException(404, "Not found")
+    session.delete(client)
+    session.commit()
+    return {"ok": True}
+
+# --- Sales ---
 @app.post("/api/sales")
-def create_sale_api(
-    sale_data: dict, 
-    session: Session = Depends(get_session), 
-    user: User = Depends(require_auth)
-):
+def create_sale_api(sale_data: dict, session: Session = Depends(get_session), user: User = Depends(require_auth)):
     try:
         sale = stock_service.process_sale(session, user_id=user.id, items_data=sale_data["items"])
         return sale
