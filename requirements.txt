@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+sqlmodel
+python-multipart
+jinja2
+python-barcode
+pillow
+bcrypt
+psycopg2-binary

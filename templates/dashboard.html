@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - StockApp{% endblock %}
+
+{% block content %}
+<!-- Stats Grid -->
+<div class="grid-dashboard">
+    <div class="glass-card">
+        <div class="stat-title">Ventas de Hoy</div>
+        <div class="stat-value">$1,250.00</div>
+    </div>
+    <div class="glass-card">
+        <div class="stat-title">Productos en Stock</div>
+        <div class="stat-value">{{ total_products | default(0) }}</div>
+    </div>
+    <div class="glass-card">
+        <div class="stat-title">Alertas de Stock</div>
+        <div class="stat-value" style="color: #ef4444;">{{ low_stock | default(0) }}</div>
+    </div>
+</div>
+
+<!-- Quick Actions & Recent -->
+<div class="glass-card">
+    <h2 style="margin-bottom: 16px;">Actividad Reciente</h2>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID Venta</th>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Placeholder Data -->
+                {% for sale in recent_sales %}
+                <tr>
+                    <td>#{{ sale.id }}</td>
+                    <td>{{ sale.timestamp.strftime('%H:%M') }}</td>
+                    <td>Contado</td>
+                    <td>${{ sale.total_amount }}</td>
+                    <td><span style="color: green;">Completado</span></td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-muted);">No hay ventas recientes</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div style="margin-top: 24px; text-align: right;">
+        <a href="/pos" class="btn">Nueva Venta</a>
+    </div>
+</div>
+{% endblock %}

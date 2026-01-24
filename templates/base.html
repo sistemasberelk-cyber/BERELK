@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}StockApp Professional{% endblock %}</title>
+    <!-- Styles -->
+    <link rel="stylesheet" href="/static/css/style.css">
+    {% block head %}{% endblock %}
+</head>
+
+<body>
+
+    <div class="container">
+        <!-- Navigation -->
+        <nav class="navbar glass-card">
+            <a href="/" class="logo">StockApp Pro</a>
+            <div class="nav-links">
+                <a href="/" class="{% if active_page == 'home' %}active{% endif %}">Dashboard</a>
+                <a href="/products" class="{% if active_page == 'products' %}active{% endif %}">Productos</a>
+                <a href="/pos" class="{% if active_page == 'pos' %}active{% endif %}">Punto de Venta</a>
+                <a href="/sales" class="{% if active_page == 'sales' %}active{% endif %}">Reportes</a>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main>
+            {% block content %}
+            {% endblock %}
+        </main>
+    </div>
+
+    <!-- Scripts -->
+    {% block scripts %}
+    {% endblock %}
+</body>
+
+</html>
