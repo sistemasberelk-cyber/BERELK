@@ -11,6 +11,8 @@ WORKDIR /app
 # Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# AGGRESSIVE FIX: Uninstall bcrypt if present to prevent passlib from using it
+RUN pip uninstall -y bcrypt || true
 
 # Copy Application Code
 COPY . .

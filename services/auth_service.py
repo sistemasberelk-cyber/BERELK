@@ -3,6 +3,7 @@ from sqlmodel import Session, select
 from database.models import User, Settings
 
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+print(f"INFO: Password Context Schemes: {pwd_context.schemes()}")
 
 class AuthService:
     @staticmethod

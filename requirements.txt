@@ -1,4 +1,4 @@
-# Backend Requirements (v2 - cache bust)
+# Backend Requirements (v3 - cache bust)
 fastapi
 uvicorn[standard]
 sqlmodel
