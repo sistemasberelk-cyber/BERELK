@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Reportes de Ventas - NexPos{% endblock %}
+
+{% block content %}
+<div class="glass-card">
+    <h2 style="margin-bottom: 24px;">Reporte de Ventas</h2>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Vendedor</th>
+                    <th>Total</th>
+                    <th>Items</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sale in sales %}
+                <tr>
+                    <td>{{ sale.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                        <!-- User relationship might need to be eager loaded or handled -->
+                        {% if sale.user_id %}Usuario #{{ sale.user_id }}{% else %}Sistema{% endif %}
+                    </td>
+                    <td style="font-weight: bold; color: var(--primary-color);">${{ sale.total_amount }}</td>
+                    <td>
+                        <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;">
+                            {% for item in sale.items %}
+                            <li>{{ item.quantity }}x {{ item.product_name }} (${{ item.unit_price }})</li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="4" style="text-align: center; padding: 20px;">No hay ventas registradas.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
