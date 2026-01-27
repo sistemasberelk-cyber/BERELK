@@ -78,7 +78,12 @@
             if (html5QrcodeScanner === null) {
                 html5QrcodeScanner = new Html5QrcodeScanner(
                     "reader",
-                    { fps: 10, qrbox: 250, formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13] },
+                    {
+                        fps: 10,
+                        qrbox: 250,
+                        formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13],
+                        videoConstraints: { facingMode: "environment" }
+                    },
                     false
                 );
             }
