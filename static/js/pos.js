@@ -19,22 +19,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderProducts(allProducts);
 });
 
-// Filter products
-document.getElementById('product-search').addEventListener('input', (e) => {
-    const term = e.target.value.toLowerCase();
-    const filtered = allProducts.filter(p =>
-        p.name.toLowerCase().includes(term) ||
-        (p.barcode && p.barcode.includes(term))
-    );
-    renderProducts(filtered);
-
-    // Auto-add if exact barcode match
-    const exactMatch = allProducts.find(p => p.barcode === term);
-    if (exactMatch) {
-        addToCart(exactMatch);
-        e.target.value = ''; // Clear for next scan
-        renderProducts(allProducts);
-    }
+const exactMatch = allProducts.find(p => p.barcode === term);
+if (exactMatch) {
+    addToCart(exactMatch);
+    e.target.value = ''; // Clear for next scan
+    renderProducts(allProducts);
+}
 });
 
 function renderProducts(products) {

@@ -8,8 +8,14 @@
     <!-- Left: Product Selection -->
     <div class="glass-card">
         <h2>Scanner / Búsqueda</h2>
-        <input type="text" id="product-search" placeholder="Escanear Barcode o buscar nombre..." autofocus
-            style="margin-top: 16px;">
+        <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <input type="text" id="product-search" placeholder="Escanear Barcode o buscar nombre..." autofocus
+                style="margin-top: 0; flex: 1;">
+            <button onclick="startScanner()" class="btn"
+                style="padding: 0 20px; font-size: 1.2rem; display: flex; align-items: center; gap: 8px;">
+                <span>📷</span> Escanear
+            </button>
+        </div>
 
         <div id="product-results"
             style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px;">
@@ -19,16 +25,7 @@
 
     <!-- Right: Current Cart -->
     <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-between;">
-        <div class="glass-card" style="margin-bottom: 24px;">
-            <div style="display: flex; gap: 12px;">
-                <input type="text" id="search-input" placeholder="Buscar producto..."
-                    style="flex: 1; margin-bottom: 0; padding: 12px; font-size: 1.1rem;">
-                <button onclick="startScanner()" class="btn"
-                    style="padding: 0 20px; font-size: 1.2rem; display: flex; align-items: center; gap: 8px;">
-                    <span>📷</span> Escanear
-                </button>
-            </div>
-        </div>
+        <!-- Removed redundant search bar -->
 
         <div class="glass-card" style="min-height: 400px; display: flex; flex-direction: column;">
             <div id="cart-items" style="flex: 1;">
