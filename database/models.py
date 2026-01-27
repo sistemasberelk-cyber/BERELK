@@ -19,6 +19,7 @@ class Client(SQLModel, table=True):
     notes: Optional[str] = None
     
     sales: List["Sale"] = Relationship(back_populates="client")
+    payments: List["Payment"] = Relationship(back_populates="client")
 
 # --- User Model ---
 class User(SQLModel, table=True):
@@ -71,3 +72,14 @@ class SaleItem(SQLModel, table=True):
     total: float
     
     sale: Optional[Sale] = Relationship(back_populates="items")
+
+# --- Payment Model (Current Account) ---
+class Payment(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    client_id: int = Field(foreign_key="client.id")
+    amount: float
+    date: datetime = Field(default_factory=datetime.utcnow)
+    note: Optional[str] = None
+    
+    # Relationship
+    client: Optional[Client] = Relationship(back_populates="payments")
