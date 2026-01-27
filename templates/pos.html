@@ -19,37 +19,97 @@
 
     <!-- Right: Current Cart -->
     <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-between;">
-        <div>
-            <h2>Carrito</h2>
-            <table id="cart-table">
-                <thead>
-                    <tr>
-                        <th>Producto</th>
-                        <th>Cant</th>
-                        <th>Total</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="cart-body">
-                    <!-- Cart Items -->
-                </tbody>
-            </table>
+        <div class="glass-card" style="margin-bottom: 24px;">
+            <div style="display: flex; gap: 12px;">
+                <input type="text" id="search-input" placeholder="Buscar producto..."
+                    style="flex: 1; margin-bottom: 0; padding: 12px; font-size: 1.1rem;">
+                <button onclick="startScanner()" class="btn" style="padding: 0 20px; font-size: 1.5rem;">📷</button>
+            </div>
         </div>
 
-        <div style="margin-top: 24px; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 16px;">
-            <div
-                style="display: flex; justify-content: space-between; font-size: 1.5rem; font-weight: 700; margin-bottom: 24px;">
-                <span>Total:</span>
-                <span id="cart-total">$0.00</span>
+        <div class="glass-card" style="min-height: 400px; display: flex; flex-direction: column;">
+            <div id="cart-items" style="flex: 1;">
+                <!-- Cart items will go here -->
+                <div style="text-align: center; padding: 40px; color: #9ca3af;">
+                    El carrito está vacío
+                </div>
             </div>
 
-            <button onclick="checkout()" class="btn"
-                style="width: 100%; font-size: 1.2rem; padding: 16px;">Cobrar</button>
+            <div style="border-top: 1px solid rgba(0,0,0,0.1); padding-top: 16px; margin-top: 16px;">
+                <div
+                    style="display: flex; justify-content: space-between; font-size: 1.5rem; font-weight: bold; margin-bottom: 16px;">
+                    <span>Total</span>
+                    <span id="cart-total">$0.00</span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <select id="client-select"
+                        style="padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb; background: white;">
+                        <option value="">Cliente Casual</option>
+                        <!-- Populated by JS -->
+                    </select>
+                    <button onclick="checkout()" class="btn" style="width: 100%; font-size: 1.2rem;">Cobrar</button>
+                </div>
+            </div>
         </div>
     </div>
-</div>
-{% endblock %}
 
-{% block scripts %}
-<script src="/static/js/pos.js"></script>
-{% endblock %}
+    <!-- Scanner Modal -->
+    <div id="scanner-modal"
+        style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 200; justify-content: center; align-items: center; flex-direction: column;">
+        <div style="background: white; padding: 16px; border-radius: 12px; width: 90%; max-width: 500px;">
+            <h3 style="margin-bottom: 16px; text-align: center;">Escanear Producto</h3>
+            <div id="reader" style="width: 100%;"></div>
+            <button onclick="closeScanner()" class="btn"
+                style="width: 100%; margin-top: 16px; background: #666;">Cerrar</button>
+        </div>
+    </div>
+    {% endblock %}
+
+    {% block scripts %}
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <script src="/static/js/pos.js"></script>
+    <script>
+        // Scanner Logic
+        let html5QrcodeScanner = null;
+
+        function startScanner() {
+            document.getElementById('scanner-modal').style.display = 'flex';
+            if (html5QrcodeScanner === null) {
+                html5QrcodeScanner = new Html5QrcodeScanner(
+                    "reader",
+                    { fps: 10, qrbox: 250, formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13] },
+                    false
+                );
+            }
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            // Attempt to find product by barcode or name
+            // The existing pos.js likely has a product list. We need to check how it works.
+            // Assuming 'allProducts' is available or we need to search.
+
+            // Find product in the global list (pos.js usually loads products)
+            const product = allProducts.find(p => p.barcode === decodedText);
+
+            if (product) {
+                addToCart(product);
+                // closeScanner(); // Option: keep open for rapid scanning? User said "scanner" likely context.
+                // Let's close for now to avoid confusion, or can play a beep.
+                alert(`Producto agregado: ${product.name}`);
+                closeScanner();
+            } else {
+                alert("Producto no encontrado por código de barras: " + decodedText);
+                closeScanner();
+            }
+        }
+
+        function onScanFailure(error) { }
+
+        function closeScanner() {
+            document.getElementById('scanner-modal').style.display = 'none';
+            if (html5QrcodeScanner) html5QrcodeScanner.clear();
+        }
+    </script>
+    {% endblock %}

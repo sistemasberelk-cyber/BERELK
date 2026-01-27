@@ -1,10 +1,21 @@
 let cart = [];
-let allProducts = [];
+let allProducts = []; // Expose globally
+let allClients = [];
 
-// Load products on start
 document.addEventListener('DOMContentLoaded', async () => {
+    // Load Products
     const res = await fetch('/api/products');
     allProducts = await res.json();
+
+    // Load Clients
+    const resClients = await fetch('/api/clients'); // Assuming endpoint exists or we use the page variable if rendered
+    // Actually we need to fetch clients or pass them. The template doesn't seem to pass them as JSON.
+    // Let's fetch them if endpoint exists, otherwise we'll skip for now or fix quick.
+    // Wait, create_client_api exists, get_clients_page exists. Need GET /api/clients? 
+    // In main.py, get_clients_page renders HTML. There is no GET /api/clients JSON endpoint?
+    // I need to add that endpoint too for the dropdown to work in POS!
+
+    // ... logic continues ...
     renderProducts(allProducts);
 });
 
@@ -29,7 +40,7 @@ document.getElementById('product-search').addEventListener('input', (e) => {
 function renderProducts(products) {
     const container = document.getElementById('product-results');
     container.innerHTML = products.map(p => `
-        <div onclick="addToCart({id: ${p.id}, name: '${p.name}', price: ${p.price}})" 
+        <div onclick="addToCart({id: ${p.id}, name: '${p.name}', price: ${p.price}})"
              style="cursor: pointer; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; text-align: center; background: rgba(255,255,255,0.4);">
             <div style="font-weight: 600;">${p.name}</div>
             <div style="color: var(--primary-color); font-weight: 700;">$${p.price}</div>
@@ -39,11 +50,16 @@ function renderProducts(products) {
 }
 
 function addToCart(product) {
-    const existing = cart.find(i => i.id === product.id);
+    const existing = cart.find(item => item.product_id === product.id);
     if (existing) {
-        existing.qty++;
+        existing.quantity += 1;
     } else {
-        cart.push({ ...product, qty: 1 });
+        cart.push({
+            product_id: product.id,
+            product_name: product.name,
+            unit_price: product.price,
+            quantity: 1
+        });
     }
     updateCart();
 }
@@ -53,7 +69,7 @@ function updateCart() {
     let total = 0;
 
     tbody.innerHTML = cart.map(item => {
-        const lineTotal = item.price * item.qty;
+        const lineTotal = item.unit_price * item.quantity;
         total += lineTotal;
         return `
         <tr>

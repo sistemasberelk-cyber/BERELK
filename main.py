@@ -264,6 +264,10 @@ def delete_product_api(id: int, session: Session = Depends(get_session), user: U
     return {"ok": True}
 
 # --- Clients ---
+@app.get("/api/clients")
+def get_clients_api(session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    return session.exec(select(Client)).all()
+
 @app.post("/api/clients")
 def create_client_api(name: str = Form(...), phone: Optional[str] = Form(None), email: Optional[str] = Form(None), address: Optional[str] = Form(None), credit_limit: Optional[float] = Form(None), session: Session = Depends(get_session), user: User = Depends(require_auth)):
     client = Client(name=name, phone=phone, email=email, address=address, credit_limit=credit_limit)
