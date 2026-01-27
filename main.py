@@ -398,7 +398,6 @@ def migrate_schema_v3(session: Session = Depends(get_session), user: User = Depe
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     from sqlalchemy import text
-    from sqlalchemy import text
     try:
         # Add description column if not exists
         session.exec(text("ALTER TABLE product ADD COLUMN description TEXT;"))
