@@ -95,7 +95,16 @@ def get_products_page(request: Request, user: User = Depends(require_auth), sett
 @app.get("/clients", response_class=HTMLResponse)
 def get_clients_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
     clients = session.exec(select(Client)).all()
-    return templates.TemplateResponse("clients.html", {"request": request, "active_page": "clients", "settings": settings, "user": user, "clients": clients})
+    
+    # Calculate balances for each client
+    # Optimization: In a real app, use a SQL aggregation query. simpler loop for now.
+    balances = {}
+    for c in clients:
+        sales_total = session.exec(select(func.sum(Sale.total_amount)).where(Sale.client_id == c.id)).one() or 0.0
+        payments_total = session.exec(select(func.sum(Payment.amount)).where(Payment.client_id == c.id)).one() or 0.0
+        balances[c.id] = float(sales_total - payments_total)
+        
+    return templates.TemplateResponse("clients.html", {"request": request, "active_page": "clients", "settings": settings, "user": user, "clients": clients, "balances": balances})
 
 @app.get("/clients/{id}/account", response_class=HTMLResponse)
 def get_client_account(id: int, request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
@@ -378,9 +387,17 @@ def migrate_schema_v3(session: Session = Depends(get_session), user: User = Depe
     
     from sqlalchemy import text
     try:
+    try:
         # Add description column if not exists
         session.exec(text("ALTER TABLE product ADD COLUMN description TEXT;"))
         session.commit()
-        return {"status": "success", "message": "Added description column to Product table"}
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        print(f"Migration error (Product): {e}")
+
+    try:
+        # Add credit_limit column to Client
+        session.exec(text("ALTER TABLE client ADD COLUMN credit_limit FLOAT;"))
+        session.commit()
+        return {"status": "success", "message": "Schema updated (Product & Client)"}
+    except Exception as e:
+        return {"status": "partial_error", "message": str(e)}

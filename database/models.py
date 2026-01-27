@@ -17,6 +17,7 @@ class Client(SQLModel, table=True):
     email: Optional[str] = None
     address: Optional[str] = None
     notes: Optional[str] = None
+    credit_limit: Optional[float] = Field(default=None)
     
     sales: List["Sale"] = Relationship(back_populates="client")
     payments: List["Payment"] = Relationship(back_populates="client")
