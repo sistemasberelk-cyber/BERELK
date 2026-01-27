@@ -28,13 +28,26 @@
                 {% for product in products %}
                 <tr>
                     <td>
-                        {% if product.barcode %}
-                        <img src="/static/barcodes/{{ product.barcode }}" height="30">
-                        {% else %}
-                        <span style="color: #999;">Generando...</span>
-                        {% endif %}
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            {% if product.image_url %}
+                            <img src="{{ product.image_url }}"
+                                style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover;">
+                            {% else %}
+                            <div
+                                style="width: 40px; height: 40px; border-radius: 8px; background: #e5e7eb; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #6b7280;">
+                                📷
+                            </div>
+                            {% endif %}
+
+                            <div>
+                                {% if product.barcode %}
+                                <div style="font-size: 0.75rem; color: #6b7280; font-family: monospace;">{{
+                                    product.barcode }}</div>
+                                {% endif %}
+                                <div style="font-weight: 500;">{{ product.name }}</div>
+                            </div>
+                        </div>
                     </td>
-                    <td style="font-weight: 500;">{{ product.name }}</td>
                     <td>${{ product.price }}</td>
                     <td>
                         <span
@@ -44,7 +57,7 @@
                     </td>
                     <td>
                         <button
-                            onclick="editProduct('{{product.id}}', '{{product.name}}', '{{product.price}}', '{{product.stock_quantity}}', '{{product.description}}')"
+                            onclick="editProduct('{{product.id}}', '{{product.name}}', '{{product.price}}', '{{product.stock_quantity}}', '{{product.description}}', '{{product.image_url}}')"
                             class="btn"
                             style="padding: 4px 8px; font-size: 0.8rem; background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color);">Editar</button>
                         <button onclick="deleteProduct('{{product.id}}')" class="btn"
@@ -66,8 +79,19 @@
     style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 100; justify-content: center; align-items: center;">
     <div class="glass-card" style="width: 100%; max-width: 500px; background: white;">
         <h3 id="modal-title" style="margin-bottom: 24px;">Nuevo Producto</h3>
-        <form id="product-form" onsubmit="submitProduct(event)">
+        <form id="product-form" onsubmit="submitProduct(event)" enctype="multipart/form-data">
             <input type="hidden" id="edit-id" name="id">
+
+            <!-- Image Upload -->
+            <div style="margin-bottom: 16px; text-align: center;">
+                <label for="p-image" style="cursor: pointer;">
+                    <img id="preview-image" src="/static/images/logo.png"
+                        style="width: 80px; height: 80px; object-fit: cover; border-radius: 12px; border: 2px dashed #ddd;">
+                    <div style="font-size: 0.8rem; color: var(--primary-color); margin-top: 4px;">Subir Foto</div>
+                </label>
+                <input type="file" id="p-image" name="image" accept="image/*" style="display: none;"
+                    onchange="previewFile()">
+            </div>
 
             <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre del Producto</label>
             <input type="text" id="p-name" name="name" required placeholder="Ej. Coca Cola">
@@ -99,15 +123,25 @@
 </div>
 
 <script>
+    function previewFile() {
+        const preview = document.getElementById('preview-image');
+        const file = document.getElementById('p-image').files[0];
+        const reader = new FileReader();
+        reader.onloadend = function () { preview.src = reader.result; }
+        if (file) { reader.readAsDataURL(file); }
+        else { preview.src = "/static/images/logo.png"; }
+    }
+
     function openModal() {
         document.getElementById('product-modal').style.display = 'flex';
         document.getElementById('product-form').reset();
         document.getElementById('edit-id').value = '';
         document.getElementById('modal-title').innerText = 'Nuevo Producto';
+        document.getElementById('preview-image').src = "/static/images/logo.png";
     }
     function closeModal() { document.getElementById('product-modal').style.display = 'none'; }
 
-    function editProduct(id, name, price, stock, description) {
+    function editProduct(id, name, price, stock, description, imageUrl) {
         document.getElementById('product-modal').style.display = 'flex';
         document.getElementById('modal-title').innerText = 'Editar Producto';
         document.getElementById('edit-id').value = id;
@@ -115,6 +149,7 @@
         document.getElementById('p-price').value = price;
         document.getElementById('p-stock').value = stock;
         document.getElementById('p-description').value = description || '';
+        document.getElementById('preview-image').src = imageUrl || "/static/images/logo.png";
     }
 
     async function deleteProduct(id) {
