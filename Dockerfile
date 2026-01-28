@@ -24,4 +24,4 @@ RUN mkdir -p static/barcodes && chmod 777 static/barcodes
 EXPOSE 8000
 
 # Start Command
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
