@@ -81,9 +81,20 @@ def get_dashboard(request: Request, user: User = Depends(require_auth), settings
     low_stock = session.exec(select(func.count(Product.id)).where(Product.stock_quantity < Product.min_stock_level)).one()
     recent_sales = session.exec(select(Sale).order_by(Sale.timestamp.desc()).limit(5)).all()
     
+    # Calculate Today's Sales
+    from datetime import datetime, date
+    today_start = datetime.combine(date.today(), datetime.min.time())
+    
+    # Sum total_amount for sales >= today_start
+    # SQLModel sum might return None if no rows
+    today_sales_total = session.exec(
+        select(func.sum(Sale.total_amount)).where(Sale.timestamp >= today_start)
+    ).one() or 0.0
+    
     return templates.TemplateResponse("dashboard.html", {
         "request": request, "active_page": "home", "settings": settings, "user": user,
-        "total_products": total_products, "low_stock": low_stock, "recent_sales": recent_sales
+        "total_products": total_products, "low_stock": low_stock, "recent_sales": recent_sales,
+        "today_sales_total": today_sales_total
     })
 
 @app.get("/pos", response_class=HTMLResponse)
@@ -167,19 +178,28 @@ def register_payment(id: int, amount: float = Form(...), note: Optional[str] = F
 
 @app.get("/sales", response_class=HTMLResponse)
 def get_sales_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
-    # Fetch sales
-    sales = session.exec(select(Sale).order_by(Sale.timestamp.desc()).limit(50)).all()
+    # All sales ordered by date
+    sales = session.exec(select(Sale).order_by(Sale.timestamp.desc())).all()
+    low_stock_products = session.exec(select(Product).where(Product.stock_quantity < Product.min_stock_level)).all()
     
-    # Fetch low stock products (where stock <= min_stock_level)
-    low_stock_products = session.exec(select(Product).where(Product.stock_quantity <= Product.min_stock_level)).all()
+    # Calculate Daily Sales Totals
+    # We do this in Python to avoid complex SQL grouping with SQLite/SQLModel which can be tricky with timezone awareness
+    from collections import defaultdict
+    daily_stats = defaultdict(float)
     
+    for sale in sales:
+        date_str = sale.timestamp.strftime('%Y-%m-%d')
+        daily_stats[date_str] += sale.total_amount
+        
+    # Convert to list of dicts for template
+    daily_sales = [{"date": k, "total": v} for k, v in daily_stats.items()]
+    # Sort by date desc
+    daily_sales.sort(key=lambda x: x['date'], reverse=True)
+
     return templates.TemplateResponse("sales.html", {
-        "request": request, 
-        "active_page": "sales", 
-        "settings": settings, 
-        "user": user, 
-        "sales": sales,
-        "low_stock_products": low_stock_products
+        "request": request, "active_page": "sales", "settings": settings, "user": user, 
+        "sales": sales, "low_stock_products": low_stock_products,
+        "daily_sales": daily_sales
     })
 
 @app.get("/settings", response_class=HTMLResponse)

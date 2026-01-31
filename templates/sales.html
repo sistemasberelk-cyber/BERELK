@@ -36,7 +36,38 @@
     </div>
     {% endif %}
 
-    <h2 style="margin-bottom: 24px;">Reporte de Ventas</h2>
+    <!-- Daily Sales Summary -->
+    <div style="margin-bottom: 32px;">
+        <h2 style="margin-bottom: 16px;">Registro de Ventas Diarias</h2>
+        <div class="glass-card table-container" style="max-height: 300px; overflow-y: auto;">
+            <table style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th style="color: var(--primary-color);">Fecha</th>
+                        <th style="color: var(--primary-color);">Total Vendido</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for day in daily_sales %}
+                    <tr>
+                        <td style="font-weight: 500;">{{ day.date }}</td>
+                        <td style="font-weight: bold; font-size: 1.1em;">${{ "%.2f"|format(day.total) }}</td>
+                        <td><span
+                                style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Cerrado</span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="3" style="text-align: center; color: #999;">Sin movimientos</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <h2 style="margin-bottom: 24px;">Detalle de Ventas</h2>
 
     <div class="table-container">
         <table>
