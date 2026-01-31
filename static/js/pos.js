@@ -63,17 +63,24 @@ function renderProducts(products) {
 }
 
 function addToCart(product) {
+    const qtyInput = document.getElementById('pos-qty');
+    const qty = parseInt(qtyInput.value) || 1;
+
     const existing = cart.find(item => item.product_id === product.id);
     if (existing) {
-        existing.quantity += 1;
+        existing.quantity += qty;
     } else {
         cart.push({
             product_id: product.id,
             product_name: product.name,
             unit_price: product.price,
-            quantity: 1
+            quantity: qty
         });
     }
+
+    // Reset Qty to 1 after add? Optional. Let's keep it for bulk scanning.
+    // qtyInput.value = 1; 
+
     updateCart();
 }
 

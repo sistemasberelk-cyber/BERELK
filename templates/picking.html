@@ -35,6 +35,18 @@
             <div id="reader" style="width: 100%; min-height: 250px;"></div>
         </div>
 
+        <!-- Quantity Control -->
+        <div class="glass-card"
+            style="margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 16px; padding: 12px;">
+            <span style="font-weight: bold; color: #666;">Cantidad:</span>
+            <button onclick="adjustQty(-1)" class="btn"
+                style="width: 40px; height: 40px; padding: 0; background: #e2e8f0; color: black;">-</button>
+            <input type="number" id="picking-qty" value="1" min="1"
+                style="width: 60px; text-align: center; font-size: 1.2rem; padding: 8px; border: 1px solid #ccc; border-radius: 8px;">
+            <button onclick="adjustQty(1)" class="btn"
+                style="width: 40px; height: 40px; padding: 0; background: #e2e8f0; color: black;">+</button>
+        </div>
+
         <!-- Last Action Log / Cart -->
         <div id="action-log" class="glass-card" style="min-height: 100px;">
             <p style="color: #64748b; text-align: center; margin-top: 32px;">Escanea un código de barras...</p>
@@ -140,12 +152,22 @@
 
     // --- Logic ---
 
+    function adjustQty(delta) {
+        const input = document.getElementById('picking-qty');
+        let val = parseInt(input.value) || 1;
+        val += delta;
+        if (val < 1) val = 1;
+        input.value = val;
+    }
+
     async function handleEntry(barcode) {
         const log = document.getElementById('action-log');
+        const qty = parseInt(document.getElementById('picking-qty').value) || 1;
+
         try {
             const formData = new FormData();
             formData.append('barcode', barcode);
-            formData.append('qty', 1);
+            formData.append('qty', qty);
 
             const res = await fetch('/api/picking/entry', { method: 'POST', body: formData });
             const data = await res.json();
@@ -155,7 +177,7 @@
                 const itemHtml = `
                     <div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px; margin-bottom: 8px; border-radius: 4px;">
                         <div style="font-weight: bold;">${data.product.name}</div>
-                        <div style="font-size: 0.9rem;">Stock actualizado: <b>${data.product.new_stock}</b> (+1)</div>
+                        <div style="font-size: 0.9rem;">Stock actualizado: <b>${data.product.new_stock}</b> (+${qty})</div>
                     </div>
                 `;
                 if (log.innerHTML.includes("Escanea")) log.innerHTML = "";
@@ -170,32 +192,16 @@
 
     async function handleExit(barcode) {
         const log = document.getElementById('action-log');
-        // In "Exit" mode, we accumulate items locally then "Print" connects to backend? 
-        // OR "Exit" creates the sale immediately per item? 
-        // User said: "Escaneo el producto y le doy imprimir". 
-        // To support Multiple items in one invoice, we should optimize:
-        // 1. Scan adds to local list.
-        // 2. "Imprimir" sends the list to backend to Create Sale + Get Invoice.
+        const qty = parseInt(document.getElementById('picking-qty').value) || 1;
 
-        // Let's resolve the product name first (optional, or just store barcode)
-        // For UI niceness, let's fetch product info quickly or just show barcode.
-
-        // Let's do a quick lookup
         try {
-            const res = await fetch(`/api/products/lookup?barcode=${barcode}`); // Need this endpoint? Or just use existing
-            // Assuming we don't have a lookup endpoint, let's just add to list and show barcode
-            // Or better, let's create a lookup endpoint or use get products (heavy).
-            // Actually, `handleExit` implies we are building a cart.
-
-            // Let's assume we send Barcode to Backend "Add to Cart" ... 
-            // Simplest: Client side list.
-
-            scannedItems.push({ barcode: barcode, qty: 1 });
+            // Add to cart
+            scannedItems.push({ barcode: barcode, qty: qty });
 
             const itemHtml = `
                     <div style="background: #fff1f2; border-left: 4px solid #ef4444; padding: 12px; margin-bottom: 8px; border-radius: 4px;">
                         <div style="font-weight: bold;">Producto (Code: ${barcode})</div>
-                        <div style="font-size: 0.9rem;">Agregado a la salida</div>
+                        <div style="font-size: 0.9rem;">Agregado a la salida (x${qty})</div>
                     </div>
                 `;
             if (log.innerHTML.includes("Escanea")) log.innerHTML = "";
