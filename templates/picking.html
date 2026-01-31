@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}Picking (v2.5) - NexPos{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: 0 auto; padding-bottom: 80px;">
+
+    <!-- Mode Selection -->
+    <div id="mode-selector" style="display: flex; flex-direction: column; gap: 24px; padding-top: 40px;">
+        <button onclick="setMode('entry')" class="mode-btn entry">
+            <div style="font-size: 3rem;">📥</div>
+            <h2>ENTRADA</h2>
+            <p>Ingreso de Mercadería</p>
+        </button>
+
+        <button onclick="setMode('exit')" class="mode-btn exit">
+            <div style="font-size: 3rem;">📤</div>
+            <h2>SALIDA</h2>
+            <p>Facturación Rápida</p>
+        </button>
+    </div>
+
+    <!-- Active Mode UI (Hidden initially) -->
+    <div id="active-mode" style="display: none;">
+        <!-- Header -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <button onclick="resetMode()" class="btn"
+                style="background: transparent; color: #666; border: 1px solid #ccc;">⬅ Volver</button>
+            <h3 id="mode-title" style="margin: 0;">MODO</h3>
+        </div>
+
+        <!-- Scanner View -->
+        <div class="glass-card"
+            style="padding: 12px; margin-bottom: 16px; background: black; overflow: hidden; border-radius: 16px;">
+            <div id="reader" style="width: 100%; min-height: 250px;"></div>
+        </div>
+
+        <!-- Last Action Log / Cart -->
+        <div id="action-log" class="glass-card" style="min-height: 100px;">
+            <p style="color: #64748b; text-align: center; margin-top: 32px;">Escanea un código de barras...</p>
+        </div>
+
+        <!-- Checkout Button (Only for Exit) -->
+        <div id="checkout-container"
+            style="display: none; position: fixed; bottom: 80px; left: 0; width: 100%; padding: 16px; text-align: center;">
+            <button onclick="processCheckout()" class="btn"
+                style="width: 90%; max-width: 500px; padding: 16px; font-size: 1.2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+                🖨️ IMPRIMIR FACTURA
+            </button>
+        </div>
+    </div>
+
+</div>
+
+<!-- Audio for feedback -->
+<!-- Beep sound usage logic in JS -->
+
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script>
+    let currentMode = null; // 'entry' or 'exit'
+    let html5QrcodeScanner = null;
+    let scannedItems = []; // For Exit mode cart
+
+    function setMode(mode) {
+        currentMode = mode;
+        document.getElementById('mode-selector').style.display = 'none';
+        document.getElementById('active-mode').style.display = 'block';
+
+        const title = document.getElementById('mode-title');
+        const log = document.getElementById('action-log');
+
+        if (mode === 'entry') {
+            title.innerText = "ENTRADA DE PRODUCTOS";
+            title.style.color = "#10b981";
+            log.innerHTML = '<p style="color: #64748b; text-align: center; margin-top: 32px;">Escanea para sumar stock (+1)...</p>';
+            document.getElementById('checkout-container').style.display = 'none';
+        } else {
+            title.innerText = "SALIDA (FACTURACIÓN)";
+            title.style.color = "#ef4444";
+            log.innerHTML = '<p style="color: #64748b; text-align: center; margin-top: 32px;">Escanea para agregar al pedido...</p>';
+            // Show checkout button only if we have items? Or always? Let's hide until scan
+            document.getElementById('checkout-container').style.display = 'block';
+            scannedItems = [];
+        }
+
+        startScanner();
+    }
+
+    function resetMode() {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.clear().catch(err => console.error("Failed to clear scanner", err));
+            html5QrcodeScanner = null;
+        }
+        document.getElementById('active-mode').style.display = 'none';
+        document.getElementById('mode-selector').style.display = 'flex';
+        currentMode = null;
+    }
+
+    function startScanner() {
+        if (html5QrcodeScanner === null) {
+            html5QrcodeScanner = new Html5QrcodeScanner(
+                "reader",
+                {
+                    fps: 10,
+                    qrbox: 250,
+                    formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.CODE_128],
+                    videoConstraints: { facingMode: "environment" }
+                },
+                false
+            );
+        }
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    }
+
+    // Debounce scan
+    let isProcessing = false;
+
+    async function onScanSuccess(decodedText, decodedResult) {
+        if (isProcessing) return;
+        isProcessing = true;
+
+        console.log(`Scan: ${decodedText}`);
+
+        // Visual feedback
+        // beep() // Optional
+
+        if (currentMode === 'entry') {
+            await handleEntry(decodedText);
+        } else {
+            await handleExit(decodedText);
+        }
+
+        // Wait a bit before next scan to prevent double scans
+        setTimeout(() => { isProcessing = false; }, 1500);
+    }
+
+    function onScanFailure(error) {
+        // quiet
+    }
+
+    // --- Logic ---
+
+    async function handleEntry(barcode) {
+        const log = document.getElementById('action-log');
+        try {
+            const formData = new FormData();
+            formData.append('barcode', barcode);
+            formData.append('qty', 1);
+
+            const res = await fetch('/api/picking/entry', { method: 'POST', body: formData });
+            const data = await res.json();
+
+            if (res.ok) {
+                // Prepend log
+                const itemHtml = `
+                    <div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px; margin-bottom: 8px; border-radius: 4px;">
+                        <div style="font-weight: bold;">${data.product.name}</div>
+                        <div style="font-size: 0.9rem;">Stock actualizado: <b>${data.product.new_stock}</b> (+1)</div>
+                    </div>
+                `;
+                if (log.innerHTML.includes("Escanea")) log.innerHTML = "";
+                log.insertAdjacentHTML('afterbegin', itemHtml);
+            } else {
+                alert("Error: " + (data.detail || "No encontrado"));
+            }
+        } catch (e) {
+            alert("Error de conexión");
+        }
+    }
+
+    async function handleExit(barcode) {
+        const log = document.getElementById('action-log');
+        // In "Exit" mode, we accumulate items locally then "Print" connects to backend? 
+        // OR "Exit" creates the sale immediately per item? 
+        // User said: "Escaneo el producto y le doy imprimir". 
+        // To support Multiple items in one invoice, we should optimize:
+        // 1. Scan adds to local list.
+        // 2. "Imprimir" sends the list to backend to Create Sale + Get Invoice.
+
+        // Let's resolve the product name first (optional, or just store barcode)
+        // For UI niceness, let's fetch product info quickly or just show barcode.
+
+        // Let's do a quick lookup
+        try {
+            const res = await fetch(`/api/products/lookup?barcode=${barcode}`); // Need this endpoint? Or just use existing
+            // Assuming we don't have a lookup endpoint, let's just add to list and show barcode
+            // Or better, let's create a lookup endpoint or use get products (heavy).
+            // Actually, `handleExit` implies we are building a cart.
+
+            // Let's assume we send Barcode to Backend "Add to Cart" ... 
+            // Simplest: Client side list.
+
+            scannedItems.push({ barcode: barcode, qty: 1 });
+
+            const itemHtml = `
+                    <div style="background: #fff1f2; border-left: 4px solid #ef4444; padding: 12px; margin-bottom: 8px; border-radius: 4px;">
+                        <div style="font-weight: bold;">Producto (Code: ${barcode})</div>
+                        <div style="font-size: 0.9rem;">Agregado a la salida</div>
+                    </div>
+                `;
+            if (log.innerHTML.includes("Escanea")) log.innerHTML = "";
+            log.insertAdjacentHTML('afterbegin', itemHtml);
+
+        } catch (e) { console.error(e) }
+    }
+
+    async function processCheckout() {
+        if (scannedItems.length === 0) {
+            alert("No hay productos escaneados.");
+            return;
+        }
+
+        if (!confirm("¿Confirmar Salida e Imprimir Factura?")) return;
+
+        try {
+            const res = await fetch('/api/picking/exit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: scannedItems })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                alert("Factura Generada #" + data.sale_id);
+                // Reset
+                scannedItems = [];
+                document.getElementById('action-log').innerHTML = '<p style="color: #64748b; text-align: center; margin-top: 32px;">Pedido finalizado. Escanea para nuevo...</p>';
+                // Trigger Print (New Tab / Window)
+                if (data.print_url) {
+                    window.open(data.print_url, '_blank');
+                }
+            } else {
+                alert("Error: " + (data.detail || "Desconocido"));
+            }
+        } catch (e) {
+            alert("Error de conexión");
+        }
+    }
+
+</script>
+
+<style>
+    .mode-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        border: none;
+        border-radius: 24px;
+        background: white;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+
+    .mode-btn:active {
+        transform: scale(0.98);
+    }
+
+    .mode-btn h2 {
+        margin: 16px 0 8px 0;
+    }
+
+    .mode-btn p {
+        margin: 0;
+        color: #666;
+    }
+
+    .entry {
+        border-bottom: 6px solid #10b981;
+    }
+
+    .exit {
+        border-bottom: 6px solid #ef4444;
+    }
+
+    /* Override base container for full width feel on mobile */
+    .container {
+        padding: 16px;
+    }
+</style>
+{% endblock %}

@@ -17,7 +17,7 @@
         <nav class="navbar glass-card">
             <a href="/" class="logo">
                 <img src="{{ settings.logo_url }}" height="30" style="vertical-align: middle; margin-right: 8px;">
-                {{ settings.company_name }} <span style="font-size: 0.8em; opacity: 0.7;">(v2.4)</span>
+                {{ settings.company_name }} <span style="font-size: 0.8em; opacity: 0.7;">(v2.5)</span>
             </a>
             <div class="nav-links">
                 <a href="/" class="{% if active_page == 'home' %}active{% endif %}">Dashboard</a>
@@ -27,6 +27,7 @@
                 <a href="/clients" class="{% if active_page == 'clients' %}active{% endif %}">Clientes</a>
                 <a href="/pos" class="{% if active_page == 'pos' %}active{% endif %}">Punto de Venta</a>
                 <a href="/sales" class="{% if active_page == 'sales' %}active{% endif %}">Reportes</a>
+                <a href="/picking" class="{% if active_page == 'picking' %}active{% endif %}">📲 Picking</a>
                 {% if user and user.role == "admin" %}
                 <a href="/settings" class="{% if active_page == 'settings' %}active{% endif %}">Configuración</a>
                 {% endif %}

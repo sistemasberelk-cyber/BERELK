@@ -729,11 +729,91 @@ def create_tax(name: str = Form(...), rate: float = Form(...), session: Session 
 @app.delete("/api/taxes/{id}")
 def delete_tax(id: int, session: Session = Depends(get_session), user: User = Depends(require_auth)):
     if user.role != "admin": raise HTTPException(403)
-    tax = session.get(Tax, id)
-    if tax:
-        session.delete(tax)
-        session.commit()
-    return {"ok": True}
+# --- Picking (v2.5 Mobile) ---
+
+@app.get("/picking", response_class=HTMLResponse)
+def picking_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings)):
+    return templates.TemplateResponse("picking.html", {"request": request, "user": user, "settings": settings})
+
+@app.post("/api/picking/entry")
+def picking_entry(
+    barcode: str = Form(...),
+    qty: int = Form(1),
+    session: Session = Depends(get_session),
+    user: User = Depends(require_auth)
+):
+    product = session.exec(select(Product).where(Product.barcode == barcode)).first()
+    if not product:
+        raise HTTPException(404, "Producto no encontrado")
+    
+    product.stock_quantity += qty
+    session.add(product)
+    session.commit()
+    session.refresh(product)
+    
+    return {"status": "ok", "product": {"name": product.name, "new_stock": product.stock_quantity}}
+
+class PickingItem(BaseModel):
+    barcode: str
+    qty: int
+
+class PickingExitRequest(BaseModel):
+    items: List[PickingItem]
+
+@app.post("/api/picking/exit")
+def picking_exit(
+    data: PickingExitRequest,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_auth)
+):
+    # Reuse stock logic but simpler
+    # Validate items
+    products_map = {}
+    total_amount = 0.0
+    
+    # 1. Validate and fetch products
+    for item in data.items:
+        prod = session.exec(select(Product).where(Product.barcode == item.barcode)).first()
+        if not prod:
+            raise HTTPException(404, f"Producto no encontrado: {item.barcode}")
+        
+        # Check stock (optional in picking? usually yes)
+        if prod.stock_quantity < item.qty:
+            raise HTTPException(400, f"Stock insuficente para: {prod.name}")
+            
+        products_map[item.barcode] = prod
+        total_amount += prod.price * item.qty
+
+    # 2. Create Sale
+    new_sale = Sale(client_id=None, user_id=user.id, total_amount=total_amount)
+    session.add(new_sale)
+    session.commit()
+    session.refresh(new_sale)
+    
+    # 3. Create items and deduct stock
+    for item in data.items:
+        prod = products_map[item.barcode]
+        
+        sale_item = SaleItem(
+            sale_id=new_sale.id,
+            product_id=prod.id,
+            quantity=item.qty,
+            unit_price=prod.price,
+            subtotal=prod.price * item.qty
+        )
+        session.add(sale_item)
+        
+        # Deduct Stock
+        prod.stock_quantity -= item.qty
+        session.add(prod)
+        
+    session.commit()
+    
+    return {
+        "status": "ok", 
+        "sale_id": new_sale.id,
+        "print_url": f"/sales/{new_sale.id}/remito" # Using existing remito URL as "Invoice"
+    }
 
 # Settings
 @app.post("/api/settings")
