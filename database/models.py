@@ -27,6 +27,13 @@ class Client(SQLModel, table=True):
     notes: Optional[str] = None
     credit_limit: Optional[float] = Field(default=None)
     
+    # New Fields
+    razon_social: Optional[str] = None
+    cuit: Optional[str] = None
+    iva_category: Optional[str] = None # Resp Inscripto, Monotributo, etc
+    transport_name: Optional[str] = None
+    transport_address: Optional[str] = None
+    
     sales: List["Sale"] = Relationship(back_populates="client")
     payments: List["Payment"] = Relationship(back_populates="client")
 
@@ -53,6 +60,11 @@ class Product(SQLModel, table=True):
     min_stock_level: int = Field(default=5) # Alert level
     category: Optional[str] = None
     image_url: Optional[str] = None
+    
+    # New Fields
+    cant_bulto: Optional[int] = Field(default=None) # Quantity per package/bulk
+    numeracion: Optional[str] = None # Size/Numbering
+    
     curve_quantity: int = Field(default=1) # Quantity in the curve/pack
 
 # --- Sale Models (Header & Detail) ---

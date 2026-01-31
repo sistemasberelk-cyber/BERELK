@@ -8,6 +8,7 @@ python-barcode
 pillow
 argon2-cffi
 passlib
+bcrypt
 psycopg2-binary
 itsdangerous
 supabase

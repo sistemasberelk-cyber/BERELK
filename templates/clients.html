@@ -17,19 +17,33 @@
         <table>
             <thead>
                 <tr>
-                    <th>Nombre</th>
-                    <th>Teléfono</th>
-                    <th>Email</th>
+                    <th>Cliente / Empresa</th>
+                    <th>Contacto</th>
                     <th>Saldo / Límite</th>
+                    <th>Transporte</th>
                     <th>Acciones</th>
                 </tr>
             </thead>
             <tbody>
                 {% for client in clients %}
                 <tr>
-                    <td style="font-weight: 500;">{{ client.name }}</td>
-                    <td>{{ client.phone or '-' }}</td>
-                    <td>{{ client.email or '-' }}</td>
+                    <td>
+                        <div style="font-weight: 500;">{{ client.name }}</div>
+                        {% if client.razon_social %}
+                        <div style="font-size: 0.8rem; color: #4b5563;">{{ client.razon_social }}</div>
+                        {% endif %}
+                        {% if client.cuit %}
+                        <div style="font-size: 0.75rem; color: #6b7280; font-family: monospace;">CUIT: {{ client.cuit }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if client.phone %}<div>📱 {{ client.phone }}</div>{% endif %}
+                        {% if client.email %}<div>📧 {{ client.email }}</div>{% endif %}
+                        {% if client.address %}
+                        <div style="font-size: 0.75rem; color: #6b7280; margin-top: 2px;">📍 {{ client.address }}</div>
+                        {% endif %}
+                    </td>
                     <td>
                         <div
                             style="font-weight: bold; color: {% if balances[client.id] > 0 %}#ef4444{% else %}#10b981{% endif %};">
@@ -38,13 +52,30 @@
                         <div style="font-size: 0.75rem; color: #6b7280;">
                             Límite: {% if client.credit_limit %}${{ client.credit_limit }}{% else %}No def.{% endif %}
                         </div>
+                        {% if client.iva_category %}
+                        <div
+                            style="font-size: 0.7rem; background: #e5e7eb; display: inline-block; padding: 2px 4px; border-radius: 4px; margin-top: 4px;">
+                            {{ client.iva_category }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td style="font-size: 0.85rem;">
+                        {% if client.transport_name %}
+                        <div style="font-weight: 500;">{{ client.transport_name }}</div>
+                        {% endif %}
+                        {% if client.transport_address %}
+                        <div style="font-size: 0.75rem; color: #6b7280;">{{ client.transport_address }}</div>
+                        {% endif %}
+                        {% if not client.transport_name and not client.transport_address %}
+                        <span style="color: #9ca3af;">-</span>
+                        {% endif %}
                     </td>
                     <td>
                         <a href="/clients/{{client.id}}/account" class="btn"
                             style="padding: 4px 8px; font-size: 0.8rem; background: transparent; border: 1px solid #10b981; color: #10b981; margin-right: 8px; text-decoration: none;">Ver
                             Cuenta</a>
                         <button
-                            onclick="editClient('{{client.id}}', '{{client.name}}', '{{client.phone}}', '{{client.email}}', '{{client.address}}', '{{client.credit_limit}}')"
+                            onclick="editClient('{{client.id}}', '{{client.name}}', '{{client.phone}}', '{{client.email}}', '{{client.address}}', '{{client.credit_limit}}', '{{client.razon_social}}', '{{client.cuit}}', '{{client.iva_category}}', '{{client.transport_name}}', '{{client.transport_address}}')"
                             class="btn"
                             style="padding: 4px 8px; font-size: 0.8rem; background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color);">Editar</button>
                         <button onclick="deleteClient('{{client.id}}')" class="btn"
@@ -69,13 +100,35 @@
         <form id="client-form" onsubmit="submitClient(event)">
             <input type="hidden" id="edit-id" name="id">
 
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre Completo</label>
+            <!-- New Fields Grid -->
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Razón Social</label>
+            <input type="text" id="c-razon-social" name="razon_social" placeholder="Empresa S.A.">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">CUIT</label>
+                    <input type="text" id="c-cuit" name="cuit" placeholder="20-12345678-9">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Condición IVA</label>
+                    <select id="c-iva" name="iva_category"
+                        style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: rgba(255,255,255,0.9);">
+                        <option value="">Seleccionar...</option>
+                        <option value="Resp. Inscripto">Resp. Inscripto</option>
+                        <option value="Monotributo">Monotributo</option>
+                        <option value="Consumidor Final">Consumidor Final</option>
+                        <option value="Exento">Exento</option>
+                    </select>
+                </div>
+            </div>
+
+            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre Completo (Contacto)</label>
             <input type="text" id="c-name" name="name" required placeholder="Juan Pérez">
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
                 <div>
                     <label style="display: block; margin-bottom: 8px; font-weight: 500;">Teléfono</label>
-                    <input type="text" id="c-phone" name="phone" placeholder="+506 8888-8888">
+                    <input type="text" id="c-phone" name="phone" placeholder="+54 9 11 1234-5678">
                 </div>
                 <div>
                     <label style="display: block; margin-bottom: 8px; font-weight: 500;">Límite Crédito ($)</label>
@@ -87,7 +140,23 @@
             <input type="email" id="c-email" name="email" placeholder="juan@ejemplo.com">
 
             <label style="display: block; margin-bottom: 8px; font-weight: 500;">Dirección</label>
-            <input type="text" id="c-address" name="address" placeholder="San José, Costa Rica">
+            <input type="text" id="c-address" name="address" placeholder="Calle Falsa 123">
+
+            <!-- Transport -->
+            <h4
+                style="margin-top: 16px; margin-bottom: 8px; color: var(--text-muted); font-size: 0.9em; text-transform: uppercase;">
+                Datos de Transporte</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre Transporte</label>
+                    <input type="text" id="c-transport-name" name="transport_name" placeholder="Expreso...">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Dirección Transporte</label>
+                    <input type="text" id="c-transport-address" name="transport_address"
+                        placeholder="Av. Transporte 123">
+                </div>
+            </div>
 
             <div style="margin-top: 24px; text-align: right;">
                 <button type="button" onclick="closeModal()" class="btn"
@@ -107,7 +176,7 @@
     }
     function closeModal() { document.getElementById('client-modal').style.display = 'none'; }
 
-    function editClient(id, name, phone, email, address, limit) {
+    function editClient(id, name, phone, email, address, limit, razonSocial, cuit, iva, transportName, transportAddress) {
         document.getElementById('client-modal').style.display = 'flex';
         document.getElementById('modal-title').innerText = 'Editar Cliente';
         document.getElementById('edit-id').value = id;
@@ -116,6 +185,13 @@
         document.getElementById('c-email').value = email === 'None' ? '' : email;
         document.getElementById('c-address').value = address === 'None' ? '' : address;
         document.getElementById('c-limit').value = limit === 'None' || limit === '' ? '' : limit;
+
+        // New Fields
+        document.getElementById('c-razon-social').value = razonSocial === 'None' ? '' : razonSocial;
+        document.getElementById('c-cuit').value = cuit === 'None' ? '' : cuit;
+        document.getElementById('c-iva').value = iva === 'None' ? '' : iva;
+        document.getElementById('c-transport-name').value = transportName === 'None' ? '' : transportName;
+        document.getElementById('c-transport-address').value = transportAddress === 'None' ? '' : transportAddress;
     }
 
     async function deleteClient(id) {
