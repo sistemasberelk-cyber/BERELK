@@ -46,6 +46,50 @@ document.addEventListener('DOMContentLoaded', async () => {
             addToCart(exactMatch);
             e.target.value = ''; // Clear for next scan
             renderProducts(allProducts);
+            document.getElementById('product-search').focus();
+        }
+    });
+
+    // Handle Enter on Quantity Input -> Focus Search
+    const qtyInput = document.getElementById('pos-qty');
+    if (qtyInput) {
+        qtyInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                document.getElementById('product-search').focus();
+            }
+        });
+    }
+
+    // Handle Enter on Product Search -> Add First Result if any
+    document.getElementById('product-search').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const term = e.target.value.toLowerCase();
+            // If empty, do nothing
+            if (!term) return;
+
+            // Check if exact match exists (already handled by input, but safe to double check)
+            const exact = allProducts.find(p => p.barcode === term);
+            if (exact) {
+                // Input handler might have caught it, but if not:
+                addToCart(exact);
+                e.target.value = '';
+                renderProducts(allProducts);
+                return;
+            }
+
+            // Otherwise pick first visible result
+            const filtered = allProducts.filter(p =>
+                p.name.toLowerCase().includes(term) ||
+                (p.barcode && p.barcode.includes(term))
+            );
+
+            if (filtered.length > 0) {
+                addToCart(filtered[0]);
+                e.target.value = '';
+                renderProducts(allProducts);
+            }
         }
     });
 });
@@ -79,7 +123,7 @@ function addToCart(product) {
     }
 
     // Reset Qty to 1 after add? Optional. Let's keep it for bulk scanning.
-    // qtyInput.value = 1; 
+    qtyInput.value = 1;
 
     updateCart();
 }
