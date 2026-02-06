@@ -36,12 +36,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         const term = e.target.value.toLowerCase();
         const filtered = allProducts.filter(p =>
             p.name.toLowerCase().includes(term) ||
-            (p.barcode && p.barcode.includes(term))
+            (p.barcode && p.barcode.includes(term)) ||
+            (p.item_number && p.item_number.toLowerCase().includes(term))
         );
         renderProducts(filtered);
 
-        // Auto-add if exact barcode match
-        const exactMatch = allProducts.find(p => p.barcode === term);
+        // Auto-add if exact barcode or item_number match
+        const exactMatch = allProducts.find(p => p.barcode === term || (p.item_number && p.item_number.toLowerCase() === term));
         if (exactMatch) {
             addToCart(exactMatch);
             e.target.value = ''; // Clear for next scan
@@ -70,7 +71,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (!term) return;
 
             // Check if exact match exists (already handled by input, but safe to double check)
-            const exact = allProducts.find(p => p.barcode === term);
+            const exact = allProducts.find(p => p.barcode === term || (p.item_number && p.item_number.toLowerCase() === term));
             if (exact) {
                 // Input handler might have caught it, but if not:
                 addToCart(exact);
@@ -82,7 +83,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Otherwise pick first visible result
             const filtered = allProducts.filter(p =>
                 p.name.toLowerCase().includes(term) ||
-                (p.barcode && p.barcode.includes(term))
+                (p.barcode && p.barcode.includes(term)) ||
+                (p.item_number && p.item_number.toLowerCase().includes(term))
             );
 
             if (filtered.length > 0) {
@@ -100,6 +102,7 @@ function renderProducts(products) {
         <div onclick="addToCart({id: ${p.id}, name: '${p.name}', price: ${p.price}})"
              style="cursor: pointer; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; text-align: center; background: rgba(255,255,255,0.4);">
             <div style="font-weight: 600;">${p.name}</div>
+            ${p.item_number ? `<div style="font-size: 0.8rem; color: #555; background: #eee; display: inline-block; padding: 2px 6px; border-radius: 4px; margin: 4px 0;">#${p.item_number}</div>` : ''}
             <div style="color: var(--primary-color); font-weight: 700;">$${p.price}</div>
             <div style="font-size: 0.8rem; color: #666;">Stock: ${p.stock_quantity}</div>
         </div>
@@ -117,6 +120,7 @@ function addToCart(product) {
         cart.push({
             product_id: product.id,
             product_name: product.name,
+            item_number: product.item_number, // Pass item number
             unit_price: product.price,
             quantity: qty
         });
@@ -137,7 +141,10 @@ function updateCart() {
         total += lineTotal;
         return `
         <tr>
-            <td>${item.product_name}</td>
+            <td>
+                ${item.product_name}
+                ${item.item_number ? `<div style="font-size: 0.75rem; color: #666;">#${item.item_number}</div>` : ''}
+            </td>
             <td>${item.quantity}</td>
             <td>$${lineTotal.toFixed(2)}</td>
             <td><button onclick="removeFromCart(${item.product_id})" style="background:none; border:none; color: red; cursor:pointer;">&times;</button></td>

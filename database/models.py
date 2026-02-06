@@ -59,6 +59,7 @@ class Product(SQLModel, table=True):
     stock_quantity: int = Field(default=0)
     min_stock_level: int = Field(default=5) # Alert level
     category: Optional[str] = None
+    item_number: Optional[str] = Field(default=None, index=True) # New Field: Código de Articulo
     image_url: Optional[str] = None
     
     # New Fields
@@ -73,6 +74,8 @@ class Sale(SQLModel, table=True):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     total_amount: float = Field(default=0.0)
     payment_method: str = Field(default="cash") # cash, card, transfer
+    amount_paid: float = Field(default=0.0)
+    payment_status: str = Field(default="paid") # paid, partial, pending
     
     # Foreign Keys
     user_id: Optional[int] = Field(default=None, foreign_key="user.id")

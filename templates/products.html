@@ -21,6 +21,7 @@
         <table>
             <thead>
                 <tr>
+                    <th>Item #</th>
                     <th>Barcode</th>
                     <th>Nombre</th>
                     <th>Categoría</th>
@@ -32,6 +33,7 @@
             <tbody>
                 {% for product in products %}
                 <tr>
+                    <td>{{ product.item_number or '' }}</td>
                     <td>
                         <div style="display: flex; align-items: center; gap: 12px;">
                             {% if product.image_url %}
@@ -69,7 +71,7 @@
                     </td>
                     <td>
                         <button
-                            onclick="editProduct('{{product.id}}', '{{product.name}}', '{{product.price}}', '{{product.stock_quantity}}', '{{product.description}}', '{{product.image_url}}', '{{product.barcode}}', '{{product.category}}', '{{product.cant_bulto}}', '{{product.numeracion}}')"
+                            onclick="editProduct('{{product.id}}', '{{product.name}}', '{{product.price}}', '{{product.stock_quantity}}', '{{product.description}}', '{{product.image_url}}', '{{product.barcode}}', '{{product.category}}', '{{product.cant_bulto}}', '{{product.numeracion}}', '{{product.item_number}}')"
                             class="btn"
                             style="padding: 4px 8px; font-size: 0.8rem; background: transparent; border: 1px solid var(--primary-color); color: var(--primary-color);">Editar</button>
                         <button onclick="deleteProduct('{{product.id}}')" class="btn"
@@ -112,6 +114,11 @@
                 <button type="button" onclick="startScanner()" class="btn"
                     style="padding: 0 16px; background: var(--text-main); display: flex; align-items: center; gap: 6px;">📷
                     Escanear</button>
+            </div>
+
+            <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 4px; font-weight: 500;">Nro Artículo / Item</label>
+                <input type="text" id="p-item-number" name="item_number" placeholder="Ej. 12345" style="width: 100%;">
             </div>
 
             <!-- New Fields Grid -->
@@ -248,7 +255,7 @@
     }
     function closeModal() { document.getElementById('product-modal').style.display = 'none'; }
 
-    function editProduct(id, name, price, stock, description, imageUrl, barcode, category, cantBulto, numeracion) {
+    function editProduct(id, name, price, stock, description, imageUrl, barcode, category, cantBulto, numeracion, itemNumber) {
         document.getElementById('product-modal').style.display = 'flex';
         document.getElementById('modal-title').innerText = 'Editar Producto';
         document.getElementById('edit-id').value = id;
@@ -262,6 +269,7 @@
         document.getElementById('p-category').value = category === 'None' ? '' : category;
         document.getElementById('p-cant-bulto').value = cantBulto === 'None' ? '' : cantBulto;
         document.getElementById('p-numeracion').value = numeracion === 'None' ? '' : numeracion;
+        document.getElementById('p-item-number').value = (!itemNumber || itemNumber === 'None') ? '' : itemNumber;
 
         const barcodeField = document.getElementById('p-barcode');
         if (barcodeField) barcodeField.value = barcode || '';

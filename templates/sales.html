@@ -76,6 +76,8 @@
                     <th>Fecha</th>
                     <th>Vendedor</th>
                     <th>Total</th>
+                    <th>Pagado</th>
+                    <th>Estado</th>
                     <th>Acciones</th>
                     <th>Items</th>
                 </tr>
@@ -89,6 +91,19 @@
                         {% if sale.user_id %}Usuario #{{ sale.user_id }}{% else %}Sistema{% endif %}
                     </td>
                     <td style="font-weight: bold; color: var(--primary-color);">${{ "%.2f"|format(sale.total_amount) }}
+                    </td>
+                    <td>${{ "%.2f"|format(sale.amount_paid or 0) }}</td>
+                    <td>
+                        {% if sale.payment_status == 'paid' %}
+                        <span
+                            style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pagado</span>
+                        {% elif sale.payment_status == 'partial' %}
+                        <span
+                            style="background: #fef3c7; color: #d97706; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Parcial</span>
+                        {% else %}
+                        <span
+                            style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pendiente</span>
+                        {% endif %}
                     </td>
                     <td>
                         <a href="/sales/{{ sale.id }}/remito" target="_blank" class="btn-small"

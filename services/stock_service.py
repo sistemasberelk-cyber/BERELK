@@ -63,15 +63,29 @@ class StockService:
             sale.items.append(sale_item)
             
         sale.total_amount = total_sale
+        
+        # Payment Logic
+        final_amount_paid = amount_paid if amount_paid is not None else total_sale
+        
+        # Determine Status
+        if final_amount_paid >= total_sale:
+            sale.payment_status = "paid"
+        elif final_amount_paid > 0:
+            sale.payment_status = "partial"
+        else:
+            sale.payment_status = "pending"
+            
+        sale.amount_paid = final_amount_paid
+        
         session.add(sale)
         
         # Handle Payment if Client is selected
-        if client_id and amount_paid is not None and amount_paid > 0:
+        if client_id and final_amount_paid > 0:
             # Create a payment record linked to this sale (conceptually via time/client)
             # The Payment model needs client_id, amount. Note is optional.
             payment = Payment(
                 client_id=client_id,
-                amount=amount_paid,
+                amount=final_amount_paid,
                 date=datetime.now(),
                 note=f"Pago inmediato en Venta" 
             )

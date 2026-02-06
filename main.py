@@ -221,6 +221,32 @@ async def update_settings(request: Request, company_name: str = Form(...), logo_
 # --- API Endpoints ---
 
 # --- Products ---
+@app.get("/api/products/export")
+def export_products_api(session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    # Export as CSV
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+    
+    products = session.exec(select(Product)).all()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    # Header - Transformed to Spanish/User Request
+    writer.writerow(["ID", "Nombre del Producto", "Categoria", "Numero de Articulo Interno", "Codigo de Barras", "Precio", "Stock", "Numeracion", "Cant Bulto"])
+    
+    for p in products:
+        writer.writerow([
+            p.id, p.name, p.category or "", p.item_number or "", p.barcode or "", 
+            p.price, p.stock_quantity, p.numeracion or "", p.cant_bulto or ""
+        ])
+        
+    output.seek(0)
+    
+    response = StreamingResponse(iter([output.getvalue()]), media_type="text/csv")
+    response.headers["Content-Disposition"] = "attachment; filename=products_export.csv"
+    return response
+
 @app.get("/api/products")
 def get_products_api(session: Session = Depends(get_session), user: User = Depends(require_auth)):
     return session.exec(select(Product)).all()
@@ -233,6 +259,7 @@ def create_product_api(
     description: Optional[str] = Form(None), 
     barcode: Optional[str] = Form(None), 
     category: Optional[str] = Form(None),
+    item_number: Optional[str] = Form(None),
     cant_bulto: Optional[int] = Form(None),
     numeracion: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None), 
@@ -242,7 +269,7 @@ def create_product_api(
     final_barcode = barcode if barcode else ""
     product = Product(
         name=name, price=price, stock_quantity=stock, description=description, barcode=final_barcode,
-        category=category, cant_bulto=cant_bulto, numeracion=numeracion
+        category=category, item_number=item_number, cant_bulto=cant_bulto, numeracion=numeracion
     )
     
     if image and image.filename:
@@ -277,6 +304,7 @@ def update_product_api(
     description: Optional[str] = Form(None), 
     barcode: Optional[str] = Form(None), 
     category: Optional[str] = Form(None),
+    item_number: Optional[str] = Form(None),
     cant_bulto: Optional[int] = Form(None),
     numeracion: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None), 
@@ -290,6 +318,7 @@ def update_product_api(
     product.stock_quantity = stock
     product.description = description
     product.category = category
+    product.item_number = item_number
     product.cant_bulto = cant_bulto
     product.numeracion = numeracion
     
@@ -534,13 +563,16 @@ def migrate_schema_v5(session: Session = Depends(get_session), user: User = Depe
     # 2. Add New Columns
     alter_statements = [
         "ALTER TABLE product ADD COLUMN category TEXT;",
+        "ALTER TABLE product ADD COLUMN item_number TEXT;",
         "ALTER TABLE product ADD COLUMN cant_bulto INTEGER;",
         "ALTER TABLE product ADD COLUMN numeracion TEXT;",
         "ALTER TABLE client ADD COLUMN razon_social TEXT;",
         "ALTER TABLE client ADD COLUMN cuit TEXT;",
         "ALTER TABLE client ADD COLUMN iva_category TEXT;",
         "ALTER TABLE client ADD COLUMN transport_name TEXT;",
-        "ALTER TABLE client ADD COLUMN transport_address TEXT;"
+        "ALTER TABLE client ADD COLUMN transport_address TEXT;",
+        "ALTER TABLE sale ADD COLUMN amount_paid FLOAT DEFAULT 0;",
+        "ALTER TABLE sale ADD COLUMN payment_status TEXT DEFAULT 'paid';"
     ]
     
     results = []
@@ -551,6 +583,34 @@ def migrate_schema_v5(session: Session = Depends(get_session), user: User = Depe
             results.append(f"Success: {stmt}")
         except Exception as e:
             results.append(f"Skipped (likely exists): {stmt} - {str(e)[:50]}")
+
+    # 3. Seed new products (Batch 1 from User Request)
+    # Check if they exist first to avoid duplicates
+    new_products_data = [
+        {"item_number": "7111", "name": "Gomon Pin Negro", "price": 7500.0, "numeracion": "35-40", "cant_bulto": 12, "category": "Verano", "stock_quantity": 100},
+        {"item_number": "7110", "name": "Articulo 7110", "price": 13000.0, "numeracion": "35-40", "cant_bulto": 12, "category": "Verano", "stock_quantity": 100},
+        {"item_number": "7098", "name": "Gomon NO Pin", "price": 6000.0, "numeracion": "35-40", "cant_bulto": 12, "category": "Verano", "stock_quantity": 100},
+        {"item_number": "7083", "name": "1/2 Alto", "price": 8500.0, "numeracion": "35-40", "cant_bulto": 12, "category": "Verano", "stock_quantity": 100},
+        {"item_number": "7091", "name": "Articulo 7091", "price": 7200.0, "numeracion": "35/6-39/0", "cant_bulto": 12, "category": "Verano", "stock_quantity": 100}
+    ]
+    
+    products_added = 0
+    from database.models import Product
+    
+    for p_data in new_products_data:
+        existing = session.exec(select(Product).where(Product.item_number == p_data['item_number'])).first()
+        if not existing:
+            # We need a barcode. Use item_number if valid.
+            import uuid
+            barcode_val = p_data['item_number'] if len(p_data['item_number']) >= 4 else str(uuid.uuid4())[:12]
+            
+            new_prod = Product(**p_data, barcode=barcode_val)
+            session.add(new_prod)
+            products_added += 1
+            
+    if products_added > 0:
+        session.commit()
+        results.append(f"Seeded {products_added} new products.")
 
     return {"status": "success", "results": results}
 
