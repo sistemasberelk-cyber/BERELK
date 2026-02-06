@@ -218,14 +218,22 @@
             }
 
             if (product) {
+                // Set default quantity from input if needed, or addToCart handles it
+                // addToCart usually reads #pos-qty or takes an arg. Pass product directly.
                 addToCart(product);
-                // closeScanner(); // Option: keep open for rapid scanning? User said "scanner" likely context.
-                // Let's close for now to avoid confusion, or can play a beep.
-                alert(`Producto agregado: ${product.name}`);
-                closeScanner();
+
+                // Show feedback without blocking
+                const feedback = document.createElement("div");
+                feedback.innerText = `AGREGADO: ${product.name}`;
+                feedback.style.cssText = "position:absolute; top:10px; left:50%; transform:translateX(-50%); background:#10b981; color:white; padding:10px 20px; border-radius:8px; font-weight:bold; z-index:1000;";
+                document.getElementById('scanner-modal').querySelector('div').appendChild(feedback);
+                setTimeout(() => feedback.remove(), 1000);
+
+                // Do NOT alert, do NOT closeScanner (allow rapid scanning)
+                // If user wants to close, they click Close.
             } else {
-                alert("Producto no encontrado por código de barras: " + decodedText);
-                closeScanner();
+                alert("Producto no encontrado: " + scanned);
+                // Don't close scanner on error, let them try again
             }
         }
 
