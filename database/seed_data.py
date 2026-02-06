@@ -56,6 +56,60 @@ def seed_products(session: Session):
             "cant_bulto": 12,
             "stock_quantity": 120,
             "barcode": "709100000001",
+        },
+        {
+            "item_number": "7108",
+            "name": "Articulo 7108",
+            "description": "Art 7108 - 35 al 40 - 12 Ps x Color",
+            "price": 12000.0,
+            "numeracion": "35 al 40",
+            "cant_bulto": 12,
+            "stock_quantity": 120,
+            "barcode": "710800000001",
+            "category": "Calzado"
+        },
+        {
+            "item_number": "7152",
+            "name": "Articulo 7152",
+            "description": "Art 7152 - 24 al 29 - 12 Ps Surtido",
+            "price": 7500.0,
+            "numeracion": "24 al 29",
+            "cant_bulto": 12,
+            "stock_quantity": 120,
+            "barcode": "715200000001",
+            "category": "Calzado"
+        },
+        {
+            "item_number": "7183",
+            "name": "Articulo 7183",
+            "description": "Art 7183 - 35/6 al 39/0 - 12 S",
+            "price": 10000.0,
+            "numeracion": "35/6 al 39/0",
+            "cant_bulto": 12,
+            "stock_quantity": 120,
+            "barcode": "718300000001",
+            "category": "Calzado"
+        },
+        {
+            "item_number": "158",
+            "name": "Articulo 158",
+            "description": "Art 158 - 24 al 30 - 12 Ps Surt",
+            "price": 5450.0,
+            "numeracion": "24 al 30",
+            "cant_bulto": 12,
+            "stock_quantity": 120,
+            "barcode": "015800000001",
+            "category": "Calzado"
+        },
+        {
+            "item_number": "7102",
+            "name": "Articulo 7102",
+            "description": "Art 7102 - 35/6 al 39/0 - 12 x C",
+            "price": 6500.0,
+            "numeracion": "35/6 al 39/0",
+            "cant_bulto": 12,
+            "stock_quantity": 120,
+            "barcode": "710200000001",
             "category": "Calzado"
         }
     ]
