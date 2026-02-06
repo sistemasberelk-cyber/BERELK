@@ -6,9 +6,14 @@
 <div class="glass-card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
         <h2>Impresor de Etiquetas</h2>
-        <div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <select name="label_type" form="printForm"
+                style="padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
+                <option value="standard">Etiqueta Bulto (Sin Precio)</option>
+                <option value="exhibition">Etiqueta Exhibición (Grande c/ Precio)</option>
+            </select>
             <button type="submit" form="printForm" class="btn">
-                🖨️ Generar Vista de Impresión
+                🖨️ Generar Vista
             </button>
         </div>
     </div>

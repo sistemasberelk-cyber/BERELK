@@ -359,6 +359,7 @@ def get_labels_page(request: Request, user: User = Depends(require_auth), settin
 async def print_labels(request: Request, session: Session = Depends(get_session)):
     form = await request.form()
     selected_ids = form.getlist("selected_products")
+    label_type = form.get("label_type", "standard")
     
     labels_to_print = []
     
@@ -403,13 +404,18 @@ async def print_labels(request: Request, session: Session = Depends(get_session)
 
             for _ in range(qty):
                 labels_to_print.append({
+                    "id": product.id,
                     "name": product.name,
                     "price": product.price,
                     "barcode": product.barcode,
-                    "barcode_file": img_filename
+                    "barcode_file": img_filename,
+                    "item_number": product.item_number,
+                    "numeracion": product.numeracion,
+                    "cant_bulto": product.cant_bulto
                 })
     
-    return templates.TemplateResponse("print_layout.html", {"request": request, "labels": labels_to_print})
+    template_name = "print_layout_exhibition.html" if label_type == "exhibition" else "print_layout.html"
+    return templates.TemplateResponse(template_name, {"request": request, "labels": labels_to_print})
 
 # --- Clients ---
 @app.get("/api/clients")

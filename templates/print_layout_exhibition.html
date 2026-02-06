@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Etiquetas Exhibición</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 10mm;
+        }
+
+        body {
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            height: 270mm;
+            /* A4 printable height approx */
+            gap: 10mm;
+        }
+
+        .label {
+            border: 2px solid #333;
+            border-radius: 10px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            background: #fffbe6;
+            /* Light yellowish paper look like photos */
+            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+            page-break-inside: avoid;
+            position: relative;
+        }
+
+        .art-header {
+            font-size: 2em;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .art-number {
+            font-size: 5em;
+            font-weight: bold;
+            line-height: 1;
+            margin: 10px 0;
+            font-family: monospace;
+            /* Sharp look */
+        }
+
+        .range {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .desc {
+            font-size: 1.5em;
+            text-align: center;
+            margin: 10px 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .box-info {
+            border: 4px solid #d35400;
+            /* Reddish orange border */
+            padding: 5px 20px;
+            font-size: 2.5em;
+            font-weight: bold;
+            border-radius: 10px;
+            transform: rotate(-2deg);
+            /* Slight handwritten vibe */
+            margin: 10px 0;
+        }
+
+        .price {
+            font-size: 6em;
+            font-weight: 900;
+            color: #c0392b;
+            /* Red price */
+            text-shadow: 2px 2px 0px #fff;
+        }
+
+        .pin {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 20px;
+            background-color: #e74c3c;
+            border-radius: 50%;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+            display: none;
+            /* Just for fun, maybe remove */
+        }
+
+        @media print {
+            .no-print {
+                display: none;
+            }
+
+            .grid {
+                page-break-after: always;
+            }
+
+            .label {
+                box-shadow: none;
+                border: 1px dashed black;
+            }
+
+            /* Simple border for print */
+        }
+    </style>
+</head>
+
+<body>
+    <div class="no-print" style="padding: 20px; text-align: center;">
+        <button onclick="window.print()" style="font-size: 1.5em; padding: 10px 20px;">🖨️ Imprimir Exhibición</button>
+    </div>
+
+    <!-- Chunk labels into groups of 4 for grid pages -->
+    {% for batch in labels | batch(4) %}
+    <div class="grid">
+        {% for item in batch %}
+        <div class="label">
+            <div class="art-header">ART</div>
+            <!-- Prefer Item Number, fallback to ID -->
+            <div class="art-number">{{ item.item_number or item.id }}</div>
+
+            <div class="range">{{ item.numeracion or 'Surtido' }}</div>
+
+            <div class="desc">{{ item.name }}</div>
+
+            {% if item.cant_bulto %}
+            <div class="box-info">{{ item.cant_bulto }} Prs</div>
+            {% endif %}
+
+            <div class="price">${{ "{:,.0f}".format(item.price).replace(',','.') }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</body>
+
+</html>
