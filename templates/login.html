@@ -27,9 +27,11 @@
 
 {% block content %}
 <div class="login-container">
-    <div class="glass-card login-card">
-        <img src="/static/images/logo.png" alt="NexPos Logo" height="60" style="margin-bottom: 24px;">
-        <h2 style="margin-bottom: 8px;">Bienvenido</h2>
+    <div class="login-card">
+        <div class="logo">
+            <img src="/static/images/berelk_logo.png" alt="Logo">
+        </div>
+        <h2>Bienvenido a Berel K</h2>
         <p style="color: var(--text-muted); margin-bottom: 32px;">Inicia sesión para continuar</p>
 
         {% if error %}

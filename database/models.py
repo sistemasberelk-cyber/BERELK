@@ -5,8 +5,8 @@ from sqlmodel import Field, SQLModel, Relationship
 # --- Settings Model ---
 class Settings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    company_name: str = Field(default="NexPos")
-    logo_url: str = Field(default="/static/images/logo.png")
+    company_name: str = Field(default="Berel K")
+    logo_url: str = Field(default="/static/images/berelk_logo.png")
     currency_symbol: str = Field(default="$")
     printer_name: Optional[str] = Field(default=None) # Printer name for backend printing
 
