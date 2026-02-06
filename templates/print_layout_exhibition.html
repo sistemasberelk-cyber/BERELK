@@ -55,21 +55,20 @@
         }
 
         .art-number {
-            font-size: 3.5em;
+            font-size: 3em;
             font-weight: bold;
             line-height: 1;
             margin: 0;
             font-family: monospace;
-            /* Sharp look */
         }
 
         .range {
-            font-size: 1.4em;
+            font-size: 1.2em;
             font-weight: bold;
         }
 
         .desc {
-            font-size: 1.2em;
+            font-size: 1.1em;
             text-align: center;
             margin: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -81,21 +80,18 @@
 
         .box-info {
             border: 3px solid #d35400;
-            /* Reddish orange border */
-            padding: 2px 15px;
-            font-size: 1.8em;
+            padding: 2px 12px;
+            font-size: 1.5em;
             font-weight: bold;
             border-radius: 8px;
             transform: rotate(-2deg);
-            /* Slight handwritten vibe */
-            margin: 5px 0;
+            margin: 2px 0;
         }
 
         .price {
-            font-size: 4em;
+            font-size: 3.5em;
             font-weight: 900;
             color: #c0392b;
-            /* Red price */
             text-shadow: 2px 2px 0px #fff;
             line-height: 1;
         }
@@ -154,7 +150,7 @@
             <!-- Barcode added -->
             <div style="margin: 5px 0; width: 100%; display: flex; justify-content: center;">
                 <img src="/static/barcodes/{{ item.barcode_file }}"
-                    style="height: 60px; max-width: 95%; mix-blend-mode: multiply;">
+                    style="width: 70%; height: auto; mix-blend-mode: multiply;">
             </div>
 
             {% if item.cant_bulto %}
