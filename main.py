@@ -11,6 +11,7 @@ import os
 
 from database.session import create_db_and_tables, get_session
 from database.models import Product, Sale, User, Settings, Client, Payment, Tax
+from database.seed_data import seed_products
 from services.stock_service import StockService
 from services.auth_service import AuthService
 import barcode
@@ -27,6 +28,7 @@ async def lifespan(app: FastAPI):
     # Seed Data
     session = next(get_session())
     AuthService.create_default_user_and_settings(session)
+    seed_products(session)
     yield
 
 app = FastAPI(title="NexPos System", lifespan=lifespan)
