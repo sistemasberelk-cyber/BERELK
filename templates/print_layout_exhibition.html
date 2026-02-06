@@ -147,9 +147,9 @@
 
             <!-- Compact Barcode footer -->
             <div style="width: 100%; display: flex; justify-content: center; margin-top: 5px; overflow: hidden;">
-                <!-- Use pixelated rendering and specific height to keep bars sharp -->
+                <!-- Force width to 90% to ensure bars are wide enough to scan easily -->
                 <img src="/static/barcodes/{{ item.barcode_file }}"
-                    style="height: 40px; width: auto; max-width: 95%; image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;">
+                    style="width: 90%; height: 45px; image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;">
             </div>
         </div>
         {% endfor %}

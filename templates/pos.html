@@ -177,8 +177,9 @@
                 html5QrcodeScanner = new Html5QrcodeScanner(
                     "reader",
                     {
-                        fps: 10,
-                        qrbox: 250,
+                        fps: 15,
+                        qrbox: { width: 300, height: 150 }, // Rectangular box better for 1D barcodes
+                        aspectRatio: 1.0,
                         formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.CODE_128],
                         videoConstraints: { facingMode: "environment" }
                     },
