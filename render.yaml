@@ -1,13 +1,17 @@
 services:
   - type: web
-    name: chatbot-backend
-    env: python
+    name: berelk-backend-nexpos
+    runtime: python
+    repo: https://github.com/sistemasberelk-cyber/BERELK
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
       - key: DATABASE_URL
+        sync: false # User must provide this manually in Render Dashboard from Supabase
+      - key: SUPABASE_URL
         sync: false
-      - key: DEEPSEEK_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
+      - key: SUPABASE_KEY
         sync: false
