@@ -10,6 +10,15 @@ load_dotenv()
 raw_url = os.getenv("SUPABASE_DATABASE_URL", os.getenv("DATABASE_URL"))
 DATABASE_URL = raw_url.strip() if raw_url else None
 
+if DATABASE_URL and DATABASE_URL.startswith("http"):
+    print("\n" + "="*50)
+    print("❌ ERROR DE CONFIGURACIÓN EN RENDER:")
+    print(f"Has puesto una URL web ('{DATABASE_URL[:15]}...') en la variable DATABASE_URL.")
+    print("Debes usar la 'Connection String' que empieza por 'postgresql://'.")
+    print("Ve a Supabase -> Settings -> Database -> Connection String -> URI")
+    print("="*50 + "\n")
+    raise ValueError("Configuración incorrecta: DATABASE_URL no puede ser una dirección https://")
+
 if DATABASE_URL:
     # Debug print to verify correct URL usage (masking password)
     try:
