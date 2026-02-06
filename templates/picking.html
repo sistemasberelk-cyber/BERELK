@@ -138,15 +138,20 @@
         if (isProcessing) return;
         isProcessing = true;
 
-        console.log(`Scan: ${decodedText}`);
+        // Clean AIM identifiers
+        let cleanCode = decodedText.trim();
+        cleanCode = cleanCode.replace(/^\][A-Za-z]\d/, '');
+        if (cleanCode.startsWith(']')) cleanCode = cleanCode.substring(cleanCode.indexOf(']') + 1);
+
+        console.log(`Scan: ${cleanCode} (Raw: ${decodedText})`);
 
         // Visual feedback
         // beep() // Optional
 
         if (currentMode === 'entry') {
-            await handleEntry(decodedText);
+            await handleEntry(cleanCode);
         } else {
-            await handleExit(decodedText);
+            await handleExit(cleanCode);
         }
 
         // Wait a bit before next scan to prevent double scans

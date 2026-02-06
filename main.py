@@ -391,15 +391,16 @@ async def print_labels(request: Request, session: Session = Depends(get_session)
             b_class = barcode.get_barcode_class('ean13') if len(product.barcode) in [12, 13] and product.barcode.isdigit() else barcode.get_barcode_class('code128')
             
             # Create image
+            options = {"module_width": 0.5, "module_height": 15.0, "quiet_zone": 1.0}
             try:
                 my_code = b_class(product.barcode, writer=ImageWriter())
-                my_code.save(file_path) # saves as file_path.png
+                my_code.save(file_path, options=options) # saves as file_path.png
                 img_filename = f"{safe_filename}.png"
             except Exception as e:
                 # Fallback implementation if validation fails (e.g. invalid checksum for EAN)
                 # Force Code128
                 my_code = barcode.get('code128', product.barcode, writer=ImageWriter())
-                my_code.save(file_path)
+                my_code.save(file_path, options=options)
                 img_filename = f"{safe_filename}.png"
 
             for _ in range(qty):

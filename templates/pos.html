@@ -195,7 +195,15 @@
             // Assuming 'allProducts' is available or we need to search.
 
             // Find product in the global list
-            const scanned = decodedText.trim();
+            // Strip AIM identifiers (e.g. ]C1 for Code128, ]E0 for EAN)
+            let scanned = decodedText.trim();
+            // Remove ]C1 prefix if present (common in Code128 scans on some devices)
+            if (scanned.startsWith(']C1')) scanned = scanned.substring(3);
+            // Remove general ] prefix just in case
+            if (scanned.startsWith(']')) scanned = scanned.substring(scanned.indexOf(']') + 1); // unsafe if ] is part of code, but ]C1 is standard.
+            // Better regex for specific AIM codes usually 3 chars: ] + Flag + Modifier
+            scanned = scanned.replace(/^\][A-Za-z]\d/, '');
+
             let product = allProducts.find(p =>
                 (p.barcode && p.barcode.trim() === scanned) ||
                 (p.item_number && p.item_number.toString().trim() === scanned)

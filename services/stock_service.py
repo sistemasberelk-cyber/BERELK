@@ -18,11 +18,18 @@ class StockService:
         Format: EAN13 (or Code128 if preferred).
         """
         # Simple generation using ID padded to 12 digits (EAN13 requires 12 + check digit)
-        # Using Code128 for flexibility with IDs
+        # Use Code128 by default for flexibility, or EAN13 if requested/valid
+        # We want thicker bars for better scanning and larger default size
+        options = {"module_width": 0.5, "module_height": 15.0, "quiet_zone": 1.0}
+        
+        # Determine class but use same options
+        # Note: python-barcode write/save takes options usually in the constructor or save?
+        # ImageWriter takes format. The .save method takes 'options'.
+        
         code = barcode.get('code128', str(product_id).zfill(8), writer=ImageWriter())
         filename = f"product_{product_id}"
         full_path = os.path.join(self.static_dir, filename)
-        code.save(full_path)
+        code.save(full_path, options=options)
         return f"{filename}.png"
 
     def process_sale(self, session: Session, user_id: int, items_data: List[dict], payment_method: str = "cash", client_id: Optional[int] = None, amount_paid: Optional[float] = None) -> Sale:
