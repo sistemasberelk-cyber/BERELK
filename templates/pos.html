@@ -193,12 +193,20 @@
             // The existing pos.js likely has a product list. We need to check how it works.
             // Assuming 'allProducts' is available or we need to search.
 
-            // Find product in the global list (pos.js usually loads products)
+            // Find product in the global list
             const scanned = decodedText.trim();
-            const product = allProducts.find(p =>
+            let product = allProducts.find(p =>
                 (p.barcode && p.barcode.trim() === scanned) ||
                 (p.item_number && p.item_number.toString().trim() === scanned)
             );
+
+            // Fallback: Check if scanned code starts with item_number (for generated EANs)
+            if (!product) {
+                product = allProducts.find(p => {
+                    const num = p.item_number ? p.item_number.toString().trim() : "";
+                    return num.length >= 3 && scanned.startsWith(num);
+                });
+            }
 
             if (product) {
                 addToCart(product);

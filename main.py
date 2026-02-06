@@ -865,6 +865,17 @@ def picking_entry(
     # Fallback: Try match by item_number if not found
     if not product:
         product = session.exec(select(Product).where(Product.item_number == search_term)).first()
+    
+    # Fallback: Fuzzy match (if scanned is EAN but db has item_number)
+    # Check if item_number matches prefix of scanned code (length 3, 4, 5)
+    if not product and len(search_term) >= 4:
+         prefixes = [search_term[:i] for i in range(3, min(len(search_term), 6))]
+         candidates = session.exec(select(Product).where(Product.item_number.in_(prefixes))).all()
+         # Find longest matching prefix
+         for p in sorted(candidates, key=lambda x: len(x.item_number or ""), reverse=True):
+             if p.item_number and search_term.startswith(p.item_number):
+                 product = p
+                 break
         
     if not product:
         raise HTTPException(404, f"Producto no encontrado: {search_term}")
@@ -903,6 +914,15 @@ def picking_exit(
         if not prod:
             prod = session.exec(select(Product).where(Product.item_number == search_term)).first()
             
+        # Fallback Fuzzy
+        if not prod and len(search_term) >= 4:
+             prefixes = [search_term[:i] for i in range(3, min(len(search_term), 6))]
+             candidates = session.exec(select(Product).where(Product.item_number.in_(prefixes))).all()
+             for p in sorted(candidates, key=lambda x: len(x.item_number or ""), reverse=True):
+                 if p.item_number and search_term.startswith(p.item_number):
+                     prod = p
+                     break
+                     
         if not prod:
             raise HTTPException(404, f"Producto no encontrado: {item.barcode}")
         
@@ -916,8 +936,6 @@ def picking_exit(
             # COMMENTED OUT STRICT CHECK based on common "just let me sell" requests.
             
         # Use first found product for this barcode/item_number
-        # Note: if item.barcode was actually an item_number, we map it correctly here.
-        # But we need a key for the map. Use the ORIGINAL item.barcode as key to retrieve later.
         products_map[item.barcode] = prod
         total_amount += prod.price * item.qty
 
