@@ -43,8 +43,14 @@
                 style="width: 40px; height: 40px; padding: 0; background: #e2e8f0; color: black;">-</button>
             <input type="number" id="picking-qty" value="1" min="1"
                 style="width: 60px; text-align: center; font-size: 1.2rem; padding: 8px; border: 1px solid #ccc; border-radius: 8px;">
-            <button onclick="adjustQty(1)" class="btn"
+            <button onclick="document.getElementById('picking-qty').stepUp()" class="btn"
                 style="width: 40px; height: 40px; padding: 0; background: #e2e8f0; color: black;">+</button>
+
+            <!-- Manual Enter Button -->
+            <button onclick="manualEnter()" class="btn"
+                style="height: 40px; padding: 0 16px; background: #2563eb; color: white;">
+                ⏎
+            </button>
         </div>
 
         <!-- Last Action Log / Cart -->
@@ -241,6 +247,13 @@
             }
         } catch (e) {
             alert("Error de conexión");
+        }
+    }
+
+    function manualEnter() {
+        const code = prompt("Ingrese Código de Barras / ID Manualmente:");
+        if (code && code.trim()) {
+            onScanSuccess(code.trim(), null);
         }
     }
 

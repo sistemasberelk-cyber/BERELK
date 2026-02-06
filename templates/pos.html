@@ -20,6 +20,12 @@
                     style="border:none; background:#f3f4f6; padding: 8px 12px; cursor: pointer;">+</button>
             </div>
 
+            <!-- Manual Enter Button -->
+            <button onclick="triggerSearch()" class="btn"
+                style="height: 38px; padding: 0 16px; margin-right: 8px; background: #2563eb; color: white;">
+                ⏎
+            </button>
+
             <input type="text" id="product-search" placeholder="Artículo" autofocus
                 style="margin-top: 0; flex: 1; min-width: 150px;">
             <button onclick="startScanner()" class="btn"
@@ -145,6 +151,23 @@
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="/static/js/pos.js"></script>
     <script>
+        function triggerSearch() {
+            // Trigger the existing Enter key logic on the search input
+            const input = document.getElementById('product-search');
+            // Create a new KeyboardEvent ('keydown' or 'keypress' depending on listener)
+            // pos.js likely listens for 'keypress' with key === 'Enter' or 'change'
+            // We can also try to manually trigger the logic if we knew the function name. 
+            // BUT dispatching Enter is safest without reading pos.js
+
+            // Try standard Enter event
+            input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, bubbles: true }));
+
+            // ALSO, if the user typed nothing but wants to "Confirm" the quantity for a manual entry...
+            // Check if pos.js exposes a 'addToCart' logic we can use directly?
+            // Let's assume hitting Enter on the input is enough. 
+            input.focus();
+        }
+
         // Scanner Logic
         let html5QrcodeScanner = null;
 
