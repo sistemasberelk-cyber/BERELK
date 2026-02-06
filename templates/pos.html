@@ -109,6 +109,16 @@
             </div>
 
             <div style="margin-bottom: 20px;">
+                <label for="payment-method" style="display: block; margin-bottom: 8px; font-weight: bold;">Método de
+                    Pago:</label>
+                <select id="payment-method"
+                    style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; background: #fff; font-size: 1.1rem; margin-bottom: 15px;"
+                    onchange="handlePaymentMethodChange()">
+                    <option value="cash">Efectivo</option>
+                    <option value="transfer">Transferencia</option>
+                    <option value="account">Cuenta Corriente (Fiado)</option>
+                </select>
+
                 <label for="payment-amount" style="display: block; margin-bottom: 8px; font-weight: bold;">Monto
                     Abonado:</label>
                 <div

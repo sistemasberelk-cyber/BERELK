@@ -488,7 +488,8 @@ def create_sale_api(sale_data: dict, session: Session = Depends(get_session), us
             user_id=user.id, 
             items_data=sale_data["items"], 
             client_id=sale_data.get("client_id"),
-            amount_paid=sale_data.get("amount_paid")
+            amount_paid=sale_data.get("amount_paid"),
+            payment_method=sale_data.get("payment_method", "cash")
         )
         return sale
     except ValueError as e:

@@ -191,6 +191,7 @@ async function confirmCheckout() {
 
     let amountPaidInput = document.getElementById('payment-amount').value;
     let amountPaid = parseFloat(amountPaidInput);
+    const paymentMethod = document.getElementById('payment-method').value;
 
     if (isNaN(amountPaid) || amountPaid < 0) {
         return alert("Por favor ingrese un monto válido");
@@ -199,7 +200,8 @@ async function confirmCheckout() {
     const salesData = {
         items: cart.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
         client_id: clientId ? parseInt(clientId) : null,
-        amount_paid: amountPaid
+        amount_paid: amountPaid,
+        payment_method: paymentMethod
     };
 
     // Disable button to prevent double submit
@@ -221,6 +223,8 @@ async function confirmCheckout() {
             closePaymentModal();
 
             // Ask to print Remito
+            // If printed automatically, we can use window.open
+            // User requested "Todo imprimible cada paso", so offering a print is key.
             if (confirm('Venta realizada con éxito. ¿Desea generar el Remito?')) {
                 window.open(`/sales/${sale.id}/remito`, '_blank');
             }
@@ -240,7 +244,22 @@ async function confirmCheckout() {
         console.error(e);
         alert('Error de conexión o proceso: ' + e.message);
     } finally {
-        btn.disabled = false;
-        btn.innerText = originalText;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+}
+
+function handlePaymentMethodChange() {
+    const method = document.getElementById('payment-method').value;
+    const totalText = document.getElementById('modal-total-display').innerText.replace('$', '');
+    const total = parseFloat(totalText);
+    const amountInput = document.getElementById('payment-amount');
+
+    if (method === 'account') {
+        amountInput.value = 0; // Default to 0 for debt
+    } else {
+        amountInput.value = total.toFixed(2); // Default to full payment
     }
 }

@@ -45,6 +45,14 @@ class StockService:
             if product.stock_quantity < qty:
                 raise ValueError(f"Insufficient stock for {product.name}")
             
+            # --- Credit Limit Check ---
+            # If sale is not fully paid (Current Account), check limit
+            # Calculate what part is debt
+            pending_amount = (total_sale + (product.price * qty)) - (amount_paid or 0) 
+            # Note: total_sale is accumulating in this loop, so this check is tricky inside loop.
+            # Better to check at the end or pre-calculate. 
+            # Optimization: Let's do it after calculating total_sale completely.
+            
             # Decrement Stock
             product.stock_quantity -= qty
             session.add(product)
@@ -67,6 +75,30 @@ class StockService:
         # Payment Logic
         final_amount_paid = amount_paid if amount_paid is not None else total_sale
         
+        # --- Credit Limit Check ---
+        if client_id and final_amount_paid < total_sale:
+            from database.models import Client
+            from sqlalchemy import func
+            client = session.get(Client, client_id)
+            if client and client.credit_limit:
+                 # Calculate current balance (Debt - Paid)
+                 # This logic mirrors main.py/clients logic
+                 # Note: Ideally this balance calculation should be a method on Client or Service
+                 
+                 # Sum previous sales total
+                 stmt_sales = select(func.sum(Sale.total_amount)).where(Sale.client_id == client_id)
+                 current_debt = session.exec(stmt_sales).one() or 0.0
+                 
+                 # Sum payments
+                 stmt_payments = select(func.sum(Payment.amount)).where(Payment.client_id == client_id)
+                 current_paid = session.exec(stmt_payments).one() or 0.0
+                 
+                 current_balance = current_debt - current_paid
+                 new_debt = total_sale - final_amount_paid
+                 
+                 if (current_balance + new_debt) > client.credit_limit:
+                     raise ValueError(f"Credit Limit Exceeded. Limit: ${client.credit_limit}, Current Balance: ${current_balance}, New Debt: ${new_debt}")
+
         # Determine Status
         if final_amount_paid >= total_sale:
             sale.payment_status = "paid"

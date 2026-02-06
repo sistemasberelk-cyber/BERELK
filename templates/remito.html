@@ -161,6 +161,12 @@
             <div class="document-details">
                 <div>Fecha: <strong>{{ sale.timestamp.strftime('%d/%m/%Y') }}</strong></div>
                 <div>Hora: {{ sale.timestamp.strftime('%H:%M') }}</div>
+                <div style="margin-top: 8px; font-size:0.9em;">
+                    Pago: <strong>{{ sale.payment_method | upper }}</strong>
+                    {% if sale.client and sale.payment_method == 'account' %}
+                    <br><span style="color:#e67e22;">(Cuenta Corriente)</span>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
