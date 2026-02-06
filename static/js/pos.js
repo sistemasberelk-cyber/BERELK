@@ -145,7 +145,13 @@ function updateCart() {
                 ${item.product_name}
                 ${item.item_number ? `<div style="font-size: 0.75rem; color: #666;">#${item.item_number}</div>` : ''}
             </td>
-            <td>${item.quantity}</td>
+            <td>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                    <button onclick="updateItemQty(${item.product_id}, -1)" style="width: 24px; height: 24px; border-radius: 4px; border: 1px solid #ccc; background: #eee; cursor: pointer;">-</button>
+                    <span style="min-width: 20px; text-align: center;">${item.quantity}</span>
+                    <button onclick="updateItemQty(${item.product_id}, 1)" style="width: 24px; height: 24px; border-radius: 4px; border: 1px solid #ccc; background: #eee; cursor: pointer;">+</button>
+                </div>
+            </td>
             <td>$${lineTotal.toFixed(2)}</td>
             <td><button onclick="removeFromCart(${item.product_id})" style="background:none; border:none; color: red; cursor:pointer;">&times;</button></td>
         </tr>
@@ -153,6 +159,21 @@ function updateCart() {
     }).join('');
 
     document.getElementById('cart-total').innerText = '$' + total.toFixed(2);
+}
+
+function updateItemQty(id, delta) {
+    const item = cart.find(i => i.product_id === id);
+    if (item) {
+        const newQty = item.quantity + delta;
+        if (newQty > 0) {
+            item.quantity = newQty;
+            updateCart();
+        } else {
+            // If qty goes to 0, ask to remove? Or just stop at 1?
+            // Usually stop at 1. If they want to remove, use the X button.
+            // Or allow removal if -1. Let's stop at 1 for safety.
+        }
+    }
 }
 
 function removeFromCart(id) {
