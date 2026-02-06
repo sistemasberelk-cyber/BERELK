@@ -194,7 +194,11 @@
             // Assuming 'allProducts' is available or we need to search.
 
             // Find product in the global list (pos.js usually loads products)
-            const product = allProducts.find(p => p.barcode === decodedText);
+            const scanned = decodedText.trim();
+            const product = allProducts.find(p =>
+                (p.barcode && p.barcode.trim() === scanned) ||
+                (p.item_number && p.item_number.toString().trim() === scanned)
+            );
 
             if (product) {
                 addToCart(product);
