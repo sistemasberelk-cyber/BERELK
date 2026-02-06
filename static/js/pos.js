@@ -29,7 +29,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // ... logic continues ...
-    renderProducts(allProducts);
+    // renderProducts(allProducts); // Don't show all initially
+    document.getElementById('product-results').innerHTML = '<div style="text-align:center; padding: 20px; color: #666;">Utiliza el buscador o el escáner para agregar productos.</div>';
 
     // Filter products
     document.getElementById('product-search').addEventListener('input', (e) => {
