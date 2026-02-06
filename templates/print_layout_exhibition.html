@@ -126,30 +126,45 @@
     <div class="grid">
         {% for item in batch %}
         <div class="label">
+            <!-- Header: ART Number -->
             <div
-                style="display:flex; justify-content:space-between; width:100%; align-items:flex-end; border-bottom: 2px solid #333; padding-bottom: 2px; margin-bottom: 2px;">
-                <div class="art-number">{{ item.item_number or item.id }}</div>
+                style="display:flex; justify-content:space-between; width:100%; align-items:flex-end; border-bottom: 2px solid #333; padding-bottom: 2px;">
+                <div class="art-number" style="font-size: 2.2em;">{{ item.item_number or item.id }}</div>
                 <div class="art-header">ART</div>
             </div>
 
-            <div class="desc" style="font-size:0.9em; font-weight:bold;">{{ item.name | truncate(25) }}</div>
-            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                <div class="range" style="font-size:1em;">{{ item.numeracion or 'Surt' }}</div>
-                {% if item.cant_bulto %}
-                <div class="box-info" style="font-size:1em; padding: 0 4px; border: 2px solid #d35400;">{{
-                    item.cant_bulto }}p</div>
+            <!-- Description (Top centered) -->
+            <div class="desc"
+                style="font-size:1em; font-weight:bold; width: 100%; text-align: center; margin-top: 2px;">
+                {{ item.name }}
+            </div>
+
+            <!-- Middle Section: Size & Details + PRICE -->
+            <div
+                style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%;">
+
+                <div
+                    style="width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                    <span style="font-weight: bold; font-size: 1.1em;">{{ item.description or "" }}</span>
+                    {% if item.cant_bulto %}
+                    <span
+                        style="border: 2px solid #ea580c; color: #ea580c; border-radius: 4px; padding: 0 4px; font-weight: bold;">
+                        {{ item.cant_bulto }}p
+                    </span>
+                    {% endif %}
+                </div>
+
+                {% if item.price and item.price > 0 %}
+                <div class="price" style="font-size: 3.5em; line-height: 1; margin: 5px 0;">
+                    ${{ "{:,.0f}".format(item.price).replace(',','.') }}
+                </div>
                 {% endif %}
             </div>
 
-            <div style="flex:1; display:flex; align-items:center; justify-content:center; width:100%;">
-                <div class="price">${{ "{:,.0f}".format(item.price).replace(',','.') }}</div>
-            </div>
-
-            <!-- Compact Barcode footer -->
-            <div style="width: 100%; display: flex; justify-content: center; margin-top: 5px; overflow: hidden;">
-                <!-- Force width to 90% to ensure bars are wide enough to scan easily -->
-                <img src="/static/barcodes/{{ item.barcode_file }}"
-                    style="width: 90%; height: 45px; image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges;">
+            <!-- Footer: Barcode (SVG) -->
+            <div style="width: 100%; display: flex; justify-content: center; overflow: hidden; padding-bottom: 5px;">
+                <!-- SVG scales perfectly. Width 95% to maximize scan area. No pixelated rendering needed for vectors. -->
+                <img src="/static/barcodes/{{ item.barcode_file }}" style="width: 95%; height: auto; display: block;">
             </div>
         </div>
         {% endfor %}

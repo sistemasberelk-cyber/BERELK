@@ -387,21 +387,22 @@ async def print_labels(request: Request, session: Session = Depends(get_session)
             if not safe_filename: safe_filename = f"prod_{product.id}"
             
             file_path = f"static/barcodes/{safe_filename}"
-            # Format: try EAN13 if 12/13 digits, else Code128
-            b_class = barcode.get_barcode_class('ean13') if len(product.barcode) in [12, 13] and product.barcode.isdigit() else barcode.get_barcode_class('code128')
-            
-            # Create image
-            options = {"module_width": 0.5, "module_height": 15.0, "quiet_zone": 1.0}
+            # Create image (SVG)
+            # Remove ImageWriter to default to SVG
             try:
-                my_code = b_class(product.barcode, writer=ImageWriter())
-                my_code.save(file_path, options=options) # saves as file_path.png
-                img_filename = f"{safe_filename}.png"
+                # EAN13 check
+                if len(product.barcode) in [12, 13] and product.barcode.isdigit():
+                     my_code = barcode.get('ean13', product.barcode)
+                else: 
+                     my_code = barcode.get('code128', product.barcode)
+                
+                my_code.save(file_path) # saves as .svg
+                img_filename = f"{safe_filename}.svg"
             except Exception as e:
-                # Fallback implementation if validation fails (e.g. invalid checksum for EAN)
-                # Force Code128
-                my_code = barcode.get('code128', product.barcode, writer=ImageWriter())
-                my_code.save(file_path, options=options)
-                img_filename = f"{safe_filename}.png"
+                # Fallback implementation
+                my_code = barcode.get('code128', product.barcode)
+                my_code.save(file_path)
+                img_filename = f"{safe_filename}.svg"
 
             for _ in range(qty):
                 labels_to_print.append({
