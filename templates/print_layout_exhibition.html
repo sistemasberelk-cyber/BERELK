@@ -19,58 +19,48 @@
         .grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            grid-template-rows: 1fr 1fr 1fr;
+            grid-template-rows: repeat(5, 1fr);
             height: 270mm;
             /* A4 printable height approx */
-            gap: 10mm;
+            gap: 5mm;
         }
 
         .label {
-            border: 2px solid #333;
-            border-radius: 10px;
-            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 5px 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: space-between;
             /* Compact vertically */
-            gap: 5px;
-            /* Consistent spacing */
             background: #fffbe6;
             /* Light yellowish paper look like photos */
-            box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.1);
             page-break-inside: avoid;
             position: relative;
-        }
-
-        .header-row {
-            text-align: center;
-            line-height: 1;
+            overflow: hidden;
         }
 
         .art-header {
-            font-size: 1.2em;
-            font-weight: 900;
+            font-size: 0.8em;
+            font-weight: 700;
             text-transform: uppercase;
         }
 
         .art-number {
-            font-size: 3em;
+            font-size: 2em;
             font-weight: bold;
             line-height: 1;
-            margin: 0;
             font-family: monospace;
         }
 
         .range {
-            font-size: 1.2em;
+            font-size: 1em;
             font-weight: bold;
         }
 
         .desc {
-            font-size: 1.1em;
-            text-align: center;
-            margin: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             white-space: nowrap;
             overflow: hidden;
@@ -79,20 +69,17 @@
         }
 
         .box-info {
-            border: 3px solid #d35400;
-            padding: 2px 12px;
-            font-size: 1.5em;
+            background: #fff;
+            border-radius: 4px;
+            color: #d35400;
             font-weight: bold;
-            border-radius: 8px;
-            transform: rotate(-2deg);
-            margin: 2px 0;
         }
 
         .price {
-            font-size: 3.5em;
+            font-size: 2.8em;
             font-weight: 900;
             color: #c0392b;
-            text-shadow: 2px 2px 0px #fff;
+            text-shadow: 1px 1px 0px #fff;
             line-height: 1;
         }
 
@@ -134,30 +121,35 @@
         <button onclick="window.print()" style="font-size: 1.5em; padding: 10px 20px;">🖨️ Imprimir Exhibición</button>
     </div>
 
-    <!-- Chunk labels into groups of 6 for grid pages -->
-    {% for batch in labels | batch(6) %}
+    <!-- Chunk labels into groups of 10 for grid pages (90x50mm fit 10 on A4) -->
+    {% for batch in labels | batch(10) %}
     <div class="grid">
         {% for item in batch %}
         <div class="label">
-            <div class="header-row">
-                <div class="art-header">ART</div>
+            <div
+                style="display:flex; justify-content:space-between; width:100%; align-items:flex-end; border-bottom: 2px solid #333; padding-bottom: 2px; margin-bottom: 2px;">
                 <div class="art-number">{{ item.item_number or item.id }}</div>
+                <div class="art-header">ART</div>
             </div>
 
-            <div class="range">{{ item.numeracion or 'Surtido' }}</div>
-            <div class="desc">{{ item.name }}</div>
+            <div class="desc" style="font-size:0.9em; font-weight:bold;">{{ item.name | truncate(25) }}</div>
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                <div class="range" style="font-size:1em;">{{ item.numeracion or 'Surt' }}</div>
+                {% if item.cant_bulto %}
+                <div class="box-info" style="font-size:1em; padding: 0 4px; border: 2px solid #d35400;">{{
+                    item.cant_bulto }}p</div>
+                {% endif %}
+            </div>
 
-            <!-- Barcode added -->
-            <div style="margin: 5px 0; width: 100%; display: flex; justify-content: center;">
+            <div style="flex:1; display:flex; align-items:center; justify-content:center; width:100%;">
+                <div class="price">${{ "{:,.0f}".format(item.price).replace(',','.') }}</div>
+            </div>
+
+            <!-- Compact Barcode footer -->
+            <div style="width: 100%; display: flex; justify-content: center; margin-top:2px;">
                 <img src="/static/barcodes/{{ item.barcode_file }}"
-                    style="width: 70%; height: auto; mix-blend-mode: multiply;">
+                    style="width: 80%; height: 25px; mix-blend-mode: multiply;">
             </div>
-
-            {% if item.cant_bulto %}
-            <div class="box-info">{{ item.cant_bulto }} Prs</div>
-            {% endif %}
-
-            <div class="price">${{ "{:,.0f}".format(item.price).replace(',','.') }}</div>
         </div>
         {% endfor %}
     </div>
