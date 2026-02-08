@@ -232,29 +232,76 @@ async def update_settings(request: Request, company_name: str = Form(...), logo_
 # --- Products ---
 @app.get("/api/products/export")
 def export_products_api(session: Session = Depends(get_session), user: User = Depends(require_auth)):
-    # Export as CSV
-    import csv
-    import io
+    import pandas as pd
+    from io import BytesIO
     from fastapi.responses import StreamingResponse
     
     products = session.exec(select(Product)).all()
     
-    output = io.StringIO()
-    writer = csv.writer(output)
-    # Header - Transformed to Spanish/User Request
-    writer.writerow(["ID", "Nombre del Producto", "Categoria", "Numero de Articulo Interno", "Codigo de Barras", "Precio", "Stock", "Numeracion", "Cant Bulto"])
-    
+    data = []
     for p in products:
-        writer.writerow([
-            p.id, p.name, p.category or "", p.item_number or "", p.barcode or "", 
-            p.price, p.stock_quantity, p.numeracion or "", p.cant_bulto or ""
-        ])
+        data.append({
+            "ID": p.id,
+            "Name": p.name,
+            "Category": p.category,
+            "ItemNumber": p.item_number,
+            "Barcode": p.barcode,
+            "Price": p.price,
+            "Stock": p.stock_quantity,
+            "Description": p.description,
+            "Numeracion": p.numeracion,
+            "CantBulto": p.cant_bulto,
+            "PriceBulk": p.price_bulk,
+            "PriceRetail": p.price_retail
+        })
         
+    df = pd.DataFrame(data)
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
     output.seek(0)
     
-    response = StreamingResponse(iter([output.getvalue()]), media_type="text/csv")
-    response.headers["Content-Disposition"] = "attachment; filename=products_export.csv"
-    return response
+    headers = {
+        'Content-Disposition': 'attachment; filename="productos_export.xlsx"'
+    }
+    return StreamingResponse(output, headers=headers, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@app.get("/api/clients/export")
+def export_clients_api(session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    import pandas as pd
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+    
+    clients = session.exec(select(Client)).all()
+    
+    data = []
+    for c in clients:
+        data.append({
+            "ID": c.id,
+            "Name": c.name,
+            "RazonSocial": c.razon_social,
+            "CUIT": c.cuit,
+            "Phone": c.phone,
+            "Email": c.email,
+            "Address": c.address,
+            "IVACategory": c.iva_category,
+            "CreditLimit": c.credit_limit,
+            "TransportName": c.transport_name,
+            "TransportAddress": c.transport_address
+        })
+        
+    df = pd.DataFrame(data)
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    output.seek(0)
+    
+    headers = {
+        'Content-Disposition': 'attachment; filename="clientes_export.xlsx"'
+    }
+    return StreamingResponse(output, headers=headers, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 @app.get("/api/products")
 def get_products_api(session: Session = Depends(get_session), user: User = Depends(require_auth)):
