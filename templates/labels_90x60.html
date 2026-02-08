@@ -3,103 +3,133 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Etiquetas 90x60mm - Google ML Kit Ready</title>
+    <title>Etiquetas Pro 60x40mm</title>
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Oswald:wght@700&display=swap"
+        rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap');
-
-        /* RESET & GENERAL */
+        /* RESET */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            -webkit-print-color-adjust: exact;
         }
 
         body {
-            font-family: 'Roboto', sans-serif;
-            background: #f0f0f0;
+            font-family: 'Inter', sans-serif;
+            background: #e5e7eb;
             padding: 20px;
         }
 
-        /* LABEL CONTAINER (90mm x 60mm) */
+        /* --------------------------------------------------
+           ETIQUETA STANDARD (60mm x 40mm)
+           -------------------------------------------------- */
         .label-container {
-            width: 90mm;
-            height: 60mm;
+            width: 60mm;
+            height: 40mm;
             background: white;
-            border: 1px solid #ddd;
-            /* Visual border for screen only */
-            margin-bottom: 10px;
+            /* Color Base */
+            border: 1px solid #ccc;
+            /* Guia visual pantalla */
+            border-radius: 4px;
+            /* Simula troquel pantalla */
+            margin: 0 5mm 5mm 0;
+            float: left;
+            position: relative;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
-            padding: 4mm;
             page-break-inside: avoid;
-            position: relative;
-            float: left;
-            /* Allow grid layout on screen */
-            margin-right: 10px;
         }
 
-        /* VARIANT A: PRICE LABEL (GONDOLA) */
-        .variant-price .product-name {
-            font-size: 14pt;
+        /* DISEÑO TIPO SUPERMERCADO (Foto Usuario) */
+
+        /* 1. Header: Linea SKU */
+        .header-sku {
+            height: 6mm;
+            border-bottom: 2px solid #000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 2mm;
+            font-size: 8pt;
             font-weight: 700;
-            line-height: 1.2;
-            height: 38px;
-            overflow: hidden;
-            text-transform: uppercase;
         }
 
-        .variant-price .price-big {
-            font-size: 32pt;
-            font-weight: 900;
-            text-align: right;
-            margin-top: 2mm;
-        }
-
-        .variant-price .currency {
-            font-size: 16pt;
-            vertical-align: super;
-        }
-
-        .variant-price .barcode-area {
-            text-align: center;
-            margin-top: auto;
-            /* Push to bottom */
-        }
-
-        /* VARIANT B: STOCK LABEL (NO PRICE) */
-        .variant-stock {
+        /* 2. Cuerpo: Nombre o Precio */
+        .body-content {
+            flex: 1;
+            /* Ocupa el espacio disponible */
+            display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             text-align: center;
+            padding: 0 2mm;
         }
 
-        .variant-stock .product-name {
-            font-size: 16pt;
+        /* Variantes de Texto */
+        .product-name {
+            font-size: 9pt;
+            line-height: 1.1;
+            font-weight: 600;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            text-transform: uppercase;
+        }
+
+        .price-tag {
+            font-family: 'Oswald', sans-serif;
+            /* Fuente de impacto */
+            font-size: 24pt;
+            color: #b91c1c;
+            /* Rojo oferta */
             font-weight: 700;
-            margin-bottom: 4mm;
+            line-height: 1;
         }
 
-        .variant-stock .meta-info {
-            font-size: 10pt;
-            color: #666;
+        .currency {
+            font-size: 14pt;
+            vertical-align: top;
+            margin-top: 4px;
+            display: inline-block;
+        }
+
+        /* Decodificador visual (tipo 12p) */
+        .unit-badge {
+            position: absolute;
+            top: 7mm;
+            right: 1mm;
+            background: #fb923c;
+            color: white;
+            font-size: 7pt;
+            padding: 1px 3px;
+            border-radius: 2px;
+            font-weight: bold;
+        }
+
+        /* 3. Footer: Barcode */
+        .barcode-container {
+            height: 12mm;
+            width: 100%;
+            text-align: center;
             margin-bottom: 2mm;
         }
 
-        /* BARCODE STYLING */
         svg.barcode {
-            width: 100%;
-            height: 18mm;
-            /* Not too big, not too small */
-            max-width: 70mm;
+            width: 90%;
+            height: 100%;
         }
 
-        /* PRINT SETTINGS */
+        /* MEDIA PRINT */
         @media print {
             body {
                 background: white;
                 padding: 0;
+                margin: 0;
             }
 
             .no-print {
@@ -108,35 +138,31 @@
 
             .label-container {
                 border: none;
-                /* Remove border for print */
                 margin: 0;
+                border-radius: 0;
                 float: none;
+                /* Force page break for thermal printers often works best treated as block */
                 page-break-after: always;
-                /* Force 1 label per page/cut */
             }
+
+            .price-tag {
+                color: black !important;
+            }
+
+            /* Forzar negro en térmicas */
         }
 
-        /* UI CONTROLS */
+        /* UI Controls */
         .controls {
-            background: white;
-            padding: 20px;
+            background: #1f2937;
+            color: white;
+            padding: 15px;
             border-radius: 8px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-
-        button {
-            background: #2563eb;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
-            font-size: 1rem;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background: #1d4ed8;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
     </style>
 </head>
@@ -144,17 +170,25 @@
 <body>
 
     <div class="controls no-print">
-        <h1>Generador Etiquetas 90x60mm (Google ML Kit Ready)</h1>
-        <p>Selecciona los productos y el formato para imprimir.</p>
-        <div style="margin-top: 15px;">
-            <button onclick="window.print()">🖨️ Imprimir Todo</button>
-            <button onclick="loadProducts('price')" style="background:#10b981;">🏷️ Ver Con Precio</button>
-            <button onclick="loadProducts('stock')" style="background:#6366f1;">📦 Ver Solo Stock</button>
+        <div>
+            <h2 style="font-size: 1.2rem; margin-bottom: 4px;">🖨️ Etiquetas Pro (60x40mm)</h2>
+            <div style="font-size: 0.9rem; opacity: 0.8;">Estilo Góndola / Inventario</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button onclick="loadProducts('price')"
+                style="padding: 8px 16px; background: #dc2626; color: white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">💲
+                Con Precio</button>
+            <button onclick="loadProducts('stock')"
+                style="padding: 8px 16px; background: #2563eb; color: white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">📦
+                Solo Stock</button>
+            <button onclick="window.print()"
+                style="padding: 8px 16px; background: #fff; color: #333; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">🖨️
+                Imprimir</button>
         </div>
     </div>
 
     <div id="label-area">
-        <!-- LABELS INJECTED HERE -->
+        <!-- JS Injection -->
     </div>
 
     <script>
@@ -167,75 +201,78 @@
 
                 products.forEach(p => {
                     const label = document.createElement('div');
-                    label.className = `label-container ${mode === 'price' ? 'variant-price' : 'variant-stock'}`;
-
-                    // Generate Unique ID for SVG
+                    label.className = 'label-container';
                     const svgId = `bc-${p.id}`;
 
+                    // Determinar Contenido Central
+                    let mainContent = '';
+                    let badge = '';
+
                     if (mode === 'price') {
-                        // VARIANT A: PRICE
-                        label.innerHTML = `
-                            <div class="product-name">${p.name}</div>
-                            <div class="price-big"><span class="currency">$</span>${p.price}</div>
-                            <div class="barcode-area">
-                                <svg id="${svgId}" class="barcode"></svg>
-                            </div>
+                        // MODO PRECIO (Góndola)
+                        // Nombre arriba pequeño, Precio gigante
+                        mainContent = `
+                            <div class="product-name" style="margin-bottom:0px;">${p.name}</div>
+                            <div class="price-big price-tag"><span class="currency">$</span>${p.price}</div>
                         `;
+                        badge = `<div class="unit-badge">PZA</div>`;
                     } else {
-                        // VARIANT B: STOCK
-                        label.innerHTML = `
-                            <div class="product-name">${p.name}</div>
-                            <div class="meta-info">SKU: ${p.item_number || 'N/A'} | Stock: ${p.stock_quantity}</div>
-                            <div class="barcode-area">
-                                <svg id="${svgId}" class="barcode"></svg>
-                            </div>
+                        // MODO STOCK (Inventario)
+                        // Nombre GRANDE, Datos extra
+                        mainContent = `
+                            <div class="product-name" style="font-size:12pt; margin-bottom:4px;">${p.name}</div>
+                            <div style="font-size:8pt; color:#444;">Stock: ${p.stock_quantity} unidades</div>
                         `;
                     }
+
+                    // SKU / ID Logic
+                    const sku = p.item_number || String(p.id).padStart(4, '0');
+
+                    label.innerHTML = `
+                        <!-- Header -->
+                        <div class="header-sku">
+                            <span>${sku}</span>
+                            <span>ART</span>
+                        </div>
+                        
+                        ${badge}
+
+                        <!-- Body -->
+                        <div class="body-content">
+                            ${mainContent}
+                        </div>
+
+                        <!-- Footer Barcode -->
+                        <div class="barcode-container">
+                            <svg id="${svgId}" class="barcode"></svg>
+                        </div>
+                    `;
 
                     container.appendChild(label);
 
-                    // Generate Barcode
-                    // Prefer: Barcode > Item Number > ID (padded)
+                    // Barcode Generation
                     let codeValue = p.barcode;
                     let format = "CODE128";
+                    if (!codeValue) codeValue = p.item_number || String(p.id).padStart(8, '0');
+                    if (/^\d{13}$/.test(codeValue)) format = "EAN13";
 
-                    if (!codeValue) {
-                        if (p.item_number) {
-                            codeValue = p.item_number.toString();
-                        } else {
-                            // Fallback: Pad ID to 8 digits
-                            codeValue = p.id.toString().padStart(8, '0');
-                        }
-                    }
-
-                    // Strict EAN Check (Must be 13 digits numeric)
-                    if (/^\d{13}$/.test(codeValue)) {
-                        format = "EAN13";
-                    }
-
-                    try {
-                        JsBarcode(`#${svgId}`, codeValue, {
-                            format: format,
-                            lineColor: "#000",
-                            width: 2,
-                            height: 50,
-                            displayValue: true,
-                            fontSize: 14,
-                            margin: 0
-                        });
-                    } catch (e) {
-                        console.error("Barcode Error", p.name, e);
-                        // Fallback to CODE128 for non-standard EANs
-                        JsBarcode(`#${svgId}`, codeValue, { format: "CODE128", displayValue: true });
-                    }
+                    JsBarcode(`#${svgId}`, codeValue, {
+                        format: format,
+                        lineColor: "#000",
+                        width: 1.5, // Thinner lines for small label
+                        height: 30,
+                        displayValue: true,
+                        fontSize: 10,
+                        margin: 0,
+                        // flat: true // Clean render
+                    });
                 });
 
             } catch (err) {
-                alert('Error cargando productos: ' + err.message);
+                alert('Error: ' + err.message);
             }
         }
 
-        // Load default view on start
         window.onload = () => loadProducts('price');
     </script>
 </body>
