@@ -54,7 +54,10 @@ class Product(SQLModel, table=True):
     name: str
     description: Optional[str] = None
     barcode: str = Field(unique=True, index=True) 
-    price: float = Field(default=0.0)
+    price: float = Field(default=0.0) # Base Price (Unitario / Lista)
+    price_bulk: Optional[float] = Field(default=None) # Precio por Bulto
+    price_retail: Optional[float] = Field(default=None) # Precio Mayorista (User Defined)
+
     cost_price: float = Field(default=0.0) # For profit calculation
     stock_quantity: int = Field(default=0)
     min_stock_level: int = Field(default=5) # Alert level

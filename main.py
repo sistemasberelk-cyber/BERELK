@@ -271,6 +271,8 @@ def create_product_api(
     item_number: Optional[str] = Form(None),
     cant_bulto: Optional[int] = Form(None),
     numeracion: Optional[str] = Form(None),
+    price_bulk: Optional[float] = Form(None),
+    price_retail: Optional[float] = Form(None),
     image: Optional[UploadFile] = File(None), 
     session: Session = Depends(get_session), 
     user: User = Depends(require_auth)
@@ -278,7 +280,8 @@ def create_product_api(
     final_barcode = barcode if barcode else ""
     product = Product(
         name=name, price=price, stock_quantity=stock, description=description, barcode=final_barcode,
-        category=category, item_number=item_number, cant_bulto=cant_bulto, numeracion=numeracion
+        category=category, item_number=item_number, cant_bulto=cant_bulto, numeracion=numeracion,
+        price_bulk=price_bulk, price_retail=price_retail
     )
     
     if image and image.filename:
@@ -316,6 +319,8 @@ def update_product_api(
     item_number: Optional[str] = Form(None),
     cant_bulto: Optional[int] = Form(None),
     numeracion: Optional[str] = Form(None),
+    price_bulk: Optional[float] = Form(None),
+    price_retail: Optional[float] = Form(None),
     image: Optional[UploadFile] = File(None), 
     session: Session = Depends(get_session), 
     user: User = Depends(require_auth)
@@ -330,6 +335,8 @@ def update_product_api(
     product.item_number = item_number
     product.cant_bulto = cant_bulto
     product.numeracion = numeracion
+    product.price_bulk = price_bulk
+    product.price_retail = price_retail
     
     if barcode:
         product.barcode = barcode
@@ -584,6 +591,8 @@ def migrate_schema_v5(session: Session = Depends(get_session), user: User = Depe
         "ALTER TABLE product ADD COLUMN item_number TEXT;",
         "ALTER TABLE product ADD COLUMN cant_bulto INTEGER;",
         "ALTER TABLE product ADD COLUMN numeracion TEXT;",
+        "ALTER TABLE product ADD COLUMN price_retail FLOAT;", # Precio Especial/User Def
+        "ALTER TABLE product ADD COLUMN price_bulk FLOAT;", # Precio Bulto
         "ALTER TABLE client ADD COLUMN razon_social TEXT;",
         "ALTER TABLE client ADD COLUMN cuit TEXT;",
         "ALTER TABLE client ADD COLUMN iva_category TEXT;",
