@@ -7,6 +7,8 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
         <h2>Inventario</h2>
         <div>
+            <button onclick="importExcel()" class="btn" style="background-color: #f59e0b; margin-right: 8px;">📂
+                Importar</button>
             <a href="/api/products/export" class="btn" style="background-color: #10b981; margin-right: 8px;">Exportar
                 Excel</a>
             <a href="/products/labels" class="btn" style="background-color: #6366f1; margin-right: 8px;">Imprimir
@@ -366,6 +368,69 @@
 
     function printInventory() {
         window.print();
+    }
+
+    async function importExcel() {
+        const { value: file } = await Swal.fire({
+            title: 'Importar Productos',
+            html: `
+                <div style="text-align: left;">
+                    <p style="margin-bottom: 12px;">1. Descarga la plantilla base:</p>
+                    <a href="/api/templates/download/products" class="btn" style="background: #2563eb; display: block; text-align: center; margin-bottom: 24px; text-decoration: none;">📥 Descargar Plantilla Excel</a>
+                    <p style="margin-bottom: 8px;">2. Sube tu archivo con los cambios:</p>
+                </div>
+            `,
+            input: 'file',
+            inputAttributes: {
+                'accept': '.xlsx, .xls',
+                'aria-label': 'Sube tu archivo Excel'
+            },
+            showCancelButton: true,
+            confirmButtonText: 'Subir y Procesar',
+            cancelButtonText: 'Cancelar',
+            showLoaderOnConfirm: true,
+            preConfirm: (file) => {
+                if (!file) {
+                    Swal.showValidationMessage('Por favor selecciona un archivo');
+                    return false;
+                }
+                const formData = new FormData();
+                formData.append('file', file);
+
+                return fetch('/api/import/products', {
+                    method: 'POST',
+                    body: formData
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(response.statusText)
+                        }
+                        return response.json()
+                    })
+                    .catch(error => {
+                        Swal.showValidationMessage(
+                            `Request failed: ${error}`
+                        )
+                    })
+            },
+            allowOutsideClick: () => !Swal.isLoading()
+        });
+
+        if (file) {
+            let msg = `Agregados: ${file.added}, Actualizados: ${file.updated}`;
+            if (file.errors && file.errors.length > 0) {
+                msg += `<br><br><span style="color:red">Errores (${file.errors.length}):</span><br>` + file.errors.slice(0, 5).join('<br>');
+                if (file.errors.length > 5) msg += '<br>...';
+            }
+
+            Swal.fire({
+                title: 'Importación Completada',
+                html: msg,
+                icon: file.errors && file.errors.length > 0 ? 'warning' : 'success'
+            }).then(() => {
+                window.location.reload();
+            });
+        }
     }
 </script>
 

@@ -675,6 +675,61 @@ def update_settings_api(
     return {"ok": True}
 
 # --- Import / Export (Excel) ---
+@app.get("/api/templates/download/{type}")
+def download_import_template(type: str, user: User = Depends(require_auth)):
+    if user.role != "admin": raise HTTPException(403)
+    import pandas as pd
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+    
+    if type == "products":
+        # Create DataFrame with headers and a sample row
+        data = {
+            "Name": ["Ej. Coca Cola 1.5L"],
+            "Price": [1500.0],
+            "Stock": [100],
+            "Barcode": ["7791234567890"],
+            "Category": ["Bebidas"],
+            "Description": ["Gaseosa cola..."],
+            "CantBulto": [6],
+            "Numeracion": [""],
+            "ItemNumber": ["1001"],
+            "PriceRetail": [1400.0],
+            "PriceBulk": [1200.0]
+        }
+        df = pd.DataFrame(data)
+        filename = "template_productos.xlsx"
+        
+    elif type == "clients":
+        data = {
+            "Name": ["Juan Perez"],
+            "Phone": ["1122334455"],
+            "Email": ["juan@mail.com"],
+            "Address": ["Calle Falsa 123"],
+            "RazonSocial": ["Juan Perez S.A."],
+            "CUIT": ["20-11223344-5"],
+            "IVACategory": ["Resp. Inscripto"],
+            "CreditLimit": [50000.0],
+            "TransportName": ["Expreso Oeste"],
+            "TransportAddress": ["Av. Transporte 900"]
+        }
+        df = pd.DataFrame(data)
+        filename = "template_clientes.xlsx"
+    else:
+        raise HTTPException(400, "Invalid template type")
+        
+    # Validation: columns match import logic
+    
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    output.seek(0)
+    
+    headers = {
+        'Content-Disposition': f'attachment; filename="{filename}"'
+    }
+    return StreamingResponse(output, headers=headers, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
 @app.post("/api/import/products")
 async def import_products(file: UploadFile = File(...), session: Session = Depends(get_session), user: User = Depends(require_auth)):
     if user.role != "admin": raise HTTPException(403)
@@ -689,7 +744,7 @@ async def import_products(file: UploadFile = File(...), session: Session = Depen
     updated = 0
     errors = []
     
-    # Expected: Name, Price, Stock. Optional: Barcode, Category, Description, CantBulto, Numeracion
+    # Expected: Name, Price, Stock. Optional: Barcode, Category, Description, CantBulto, Numeracion, ItemNumber, PriceRetail, PriceBulk
     for index, row in df.iterrows():
         try:
             name = str(row.get('Name', '')).strip()
@@ -706,23 +761,41 @@ async def import_products(file: UploadFile = File(...), session: Session = Depen
             category = get_val('Category')
             description = get_val('Description')
             numeracion = get_val('Numeracion')
+            item_number = get_val('ItemNumber')
             
             cant_bulto = row.get('CantBulto')
             if pd.isna(cant_bulto): cant_bulto = None
             else: cant_bulto = int(cant_bulto)
             
+            # New Price Fields
+            price_retail = row.get('PriceRetail')
+            if pd.isna(price_retail): price_retail = None
+            else: price_retail = float(price_retail)
+
+            price_bulk = row.get('PriceBulk')
+            if pd.isna(price_bulk): price_bulk = None
+            else: price_bulk = float(price_bulk)
+            
             existing = None
             if barcode:
                 existing = session.exec(select(Product).where(Product.barcode == barcode)).first()
             
+            # Fallback: Try match by item_number if barcode provided is None or not found
+            if not existing and item_number:
+                 existing = session.exec(select(Product).where(Product.item_number == item_number)).first()
+
             if existing:
                 # Update
+                existing.name = name # update name too
                 existing.price = float(row.get('Price', existing.price))
                 existing.stock_quantity = int(row.get('Stock', existing.stock_quantity))
                 if category: existing.category = category
                 if description: existing.description = description
                 if numeracion: existing.numeracion = numeracion
                 if cant_bulto is not None: existing.cant_bulto = cant_bulto
+                if item_number: existing.item_number = item_number
+                if price_retail is not None: existing.price_retail = price_retail
+                if price_bulk is not None: existing.price_bulk = price_bulk
                 
                 session.add(existing)
                 updated += 1
@@ -736,7 +809,10 @@ async def import_products(file: UploadFile = File(...), session: Session = Depen
                     category=category,
                     description=description,
                     numeracion=numeracion,
-                    cant_bulto=cant_bulto
+                    cant_bulto=cant_bulto,
+                    item_number=item_number,
+                    price_retail=price_retail,
+                    price_bulk=price_bulk
                 )
                 session.add(prod)
                 added += 1
@@ -767,16 +843,53 @@ async def import_clients(file: UploadFile = File(...), session: Session = Depend
             
             # Check duplicate by name?
             existing = session.exec(select(Client).where(Client.name == name)).first()
-            if existing: continue # Skip if exists
             
-            client = Client(
-                name=name,
-                phone=str(row.get('Phone', '')) if not pd.isna(row.get('Phone')) else None,
-                email=str(row.get('Email', '')) if not pd.isna(row.get('Email')) else None,
-                address=str(row.get('Address', '')) if not pd.isna(row.get('Address')) else None
-            )
-            session.add(client)
-            added += 1
+            # Helper
+            def get_val(col, default=None):
+                val = row.get(col)
+                return str(val).strip() if not pd.isna(val) else default
+                
+            phone = get_val('Phone')
+            email = get_val('Email')
+            address = get_val('Address')
+            razon_social = get_val('RazonSocial')
+            cuit = get_val('CUIT')
+            iva_category = get_val('IVACategory')
+            transport_name = get_val('TransportName')
+            transport_address = get_val('TransportAddress')
+            
+            credit_limit = row.get('CreditLimit')
+            if pd.isna(credit_limit): credit_limit = None
+            else: credit_limit = float(credit_limit)
+            
+            if existing:
+                # Update existing client
+                if phone: existing.phone = phone
+                if email: existing.email = email
+                if address: existing.address = address
+                if razon_social: existing.razon_social = razon_social
+                if cuit: existing.cuit = cuit
+                if iva_category: existing.iva_category = iva_category
+                if credit_limit is not None: existing.credit_limit = credit_limit
+                if transport_name: existing.transport_name = transport_name
+                if transport_address: existing.transport_address = transport_address
+                session.add(existing)
+                # skipping "added" increment, maybe tack "updated" count later? For now just don't create dupes.
+            else:
+                client = Client(
+                    name=name,
+                    phone=phone,
+                    email=email,
+                    address=address,
+                    razon_social=razon_social,
+                    cuit=cuit,
+                    iva_category=iva_category,
+                    credit_limit=credit_limit,
+                    transport_name=transport_name,
+                    transport_address=transport_address
+                )
+                session.add(client)
+                added += 1
         except Exception as e:
             errors.append(f"Row {index}: {str(e)}")
             
