@@ -151,97 +151,164 @@
     <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
     <script src="/static/js/pos.js"></script>
     <script>
+        // --- 1. ENTER KEY LOGIC (Search Bar) ---
         function triggerSearch() {
-            // Trigger the existing Enter key logic on the search input
             const input = document.getElementById('product-search');
-            // Create a new KeyboardEvent ('keydown' or 'keypress' depending on listener)
-            // pos.js likely listens for 'keypress' with key === 'Enter' or 'change'
-            // We can also try to manually trigger the logic if we knew the function name. 
-            // BUT dispatching Enter is safest without reading pos.js
-
-            // Try standard Enter event
             input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, bubbles: true }));
-
-            // ALSO, if the user typed nothing but wants to "Confirm" the quantity for a manual entry...
-            // Check if pos.js exposes a 'addToCart' logic we can use directly?
-            // Let's assume hitting Enter on the input is enough. 
             input.focus();
         }
 
-        // Scanner Logic
+        // --- 2. HYBRID SCANNER LOGIC (Google Native + Legacy Fallback) ---
         let html5QrcodeScanner = null;
+        let nativeStream = null;
+        let nativeInterval = null;
 
-        function startScanner() {
-            document.getElementById('scanner-modal').style.display = 'flex';
+        async function startScanner() {
+            const modal = document.getElementById('scanner-modal');
+            modal.style.display = 'flex';
+            const readerDiv = document.getElementById('reader');
+            readerDiv.innerHTML = '<div style="padding:20px; text-align:center;">🔄 Iniciando Escáner...</div>';
+
+            // A. CHECK FOR GOOGLE NATIVE BARCODE API (Chrome Android / ML Kit)
+            if ('BarcodeDetector' in window) {
+                console.log("🚀 Usando Google Barcode Detection API (Nativo)");
+                startNativeScanner(readerDiv);
+            } else {
+                console.log("⚠️ Google API no disponible. Usando librería Legacy (html5-qrcode).");
+                startLegacyScanner();
+            }
+        }
+
+        // --- OPTION A: GOOGLE NATIVE (SUPER FAST) ---
+        async function startNativeScanner(container) {
+            try {
+                // 1. Setup Video Element
+                container.innerHTML = `
+                    <div style="position: relative; width: 100%; height: 300px; background: black; overflow: hidden; border-radius: 8px;">
+                        <video id="native-video" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
+                        <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); color: #0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px;">⚡ Google ML Active</div>
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 40%; border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 0 0 1000px rgba(0,0,0,0.5);"></div>
+                    </div>
+                `;
+                const video = document.getElementById('native-video');
+
+                // 2. Get Camera Stream
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" } }
+                }).catch(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }));
+
+                nativeStream = stream;
+                video.srcObject = stream;
+                await new Promise(r => video.onloadedmetadata = r);
+
+                // 3. Init Detector
+                const barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'code_128', 'qr_code', 'ean_8'] });
+
+                // 4. Scan Loop (Every 100ms)
+                const scanLoop = async () => {
+                    if (!nativeStream) return; // Stop if closed
+                    try {
+                        const barcodes = await barcodeDetector.detect(video);
+                        if (barcodes.length > 0) {
+                            const code = barcodes[0].rawValue;
+                            console.log("🔫 Scanned (Native):", code);
+                            onScanSuccess(code);
+                            // Optional: Beep or haptic feedback
+                            if (navigator.vibrate) navigator.vibrate(200);
+                            await new Promise(r => setTimeout(r, 1000)); // Debounce 1s
+                        }
+                    } catch (e) {
+                        console.error("Detection failed:", e);
+                    }
+                    if (nativeStream) requestAnimationFrame(scanLoop);
+                };
+                scanLoop();
+
+            } catch (err) {
+                console.error("Native Scanner failed:", err);
+                container.innerHTML = `<div style="color:red; padding:20px;">Error cámara: ${err.message}</div>`;
+                // Fallback to legacy if camera permission fails or other issue
+                setTimeout(startLegacyScanner, 2000);
+            }
+        }
+
+        // --- OPTION B: LEGACY (Compatible with iOS/Desktop) ---
+        function startLegacyScanner() {
             if (html5QrcodeScanner === null) {
                 html5QrcodeScanner = new Html5QrcodeScanner(
-                    "reader",
-                    {
-                        fps: 15,
-                        qrbox: { width: 300, height: 150 }, // Rectangular box better for 1D barcodes
-                        aspectRatio: 1.0,
-                        formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.CODE_128],
-                        videoConstraints: { facingMode: "environment" }
-                    },
-                    false
-                );
+                    "reader", {
+                    fps: 10,
+                    qrbox: { width: 250, height: 150 },
+                    aspectRatio: 1.0
+                }, false);
             }
             html5QrcodeScanner.render(onScanSuccess, onScanFailure);
         }
 
-        function onScanSuccess(decodedText, decodedResult) {
-            // Attempt to find product by barcode or name
-            // The existing pos.js likely has a product list. We need to check how it works.
-            // Assuming 'allProducts' is available or we need to search.
-
-            // Find product in the global list
-            // Strip AIM identifiers (e.g. ]C1 for Code128, ]E0 for EAN)
+        // --- COMMON SUCCESS HANDLER ---
+        function onScanSuccess(decodedText) {
+            // Logic to find product
             let scanned = decodedText.trim();
-            // Remove ]C1 prefix if present (common in Code128 scans on some devices)
+            // Cleanup prefixes
             if (scanned.startsWith(']C1')) scanned = scanned.substring(3);
-            // Remove general ] prefix just in case
-            if (scanned.startsWith(']')) scanned = scanned.substring(scanned.indexOf(']') + 1); // unsafe if ] is part of code, but ]C1 is standard.
-            // Better regex for specific AIM codes usually 3 chars: ] + Flag + Modifier
+            if (scanned.startsWith(']')) scanned = scanned.substring(scanned.indexOf(']') + 1);
             scanned = scanned.replace(/^\][A-Za-z]\d/, '');
 
-            let product = allProducts.find(p =>
+            console.log("🔍 Looking for:", scanned);
+
+            // Access global products
+            const product = allProducts.find(p =>
                 (p.barcode && p.barcode.trim() === scanned) ||
                 (p.item_number && p.item_number.toString().trim() === scanned)
             );
 
-            // Fallback: Check if scanned code starts with item_number (for generated EANs)
-            if (!product) {
-                product = allProducts.find(p => {
+            // Fallback: Partial match
+            let found = product;
+            if (!found) {
+                found = allProducts.find(p => {
                     const num = p.item_number ? p.item_number.toString().trim() : "";
                     return num.length >= 3 && scanned.startsWith(num);
                 });
             }
 
-            if (product) {
-                // Set default quantity from input if needed, or addToCart handles it
-                // addToCart usually reads #pos-qty or takes an arg. Pass product directly.
-                addToCart(product);
-
-                // Show feedback without blocking
-                const feedback = document.createElement("div");
-                feedback.innerText = `AGREGADO: ${product.name}`;
-                feedback.style.cssText = "position:absolute; top:10px; left:50%; transform:translateX(-50%); background:#10b981; color:white; padding:10px 20px; border-radius:8px; font-weight:bold; z-index:1000;";
-                document.getElementById('scanner-modal').querySelector('div').appendChild(feedback);
-                setTimeout(() => feedback.remove(), 1000);
-
-                // Do NOT alert, do NOT closeScanner (allow rapid scanning)
-                // If user wants to close, they click Close.
+            if (found) {
+                addToCart(found);
+                showScanFeedback(found.name, true);
             } else {
-                alert("Producto no encontrado: " + scanned);
-                // Don't close scanner on error, let them try again
+                showScanFeedback(`No encontrado: ${scanned}`, false);
             }
+        }
+
+        function showScanFeedback(text, isSuccess) {
+            const feedback = document.createElement("div");
+            feedback.innerText = isSuccess ? `✅ ${text}` : `❌ ${text}`;
+            feedback.style.cssText = `
+                position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+                background: ${isSuccess ? '#10b981' : '#ef4444'}; color: white;
+                padding: 10px 20px; border-radius: 8px; font-weight: bold; z-index: 1000;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            `;
+            const container = document.getElementById('native-video') ? document.getElementById('native-video').parentNode : document.getElementById('scanner-modal').querySelector('div');
+            container.appendChild(feedback);
+            setTimeout(() => feedback.remove(), 2000);
         }
 
         function onScanFailure(error) { }
 
         function closeScanner() {
             document.getElementById('scanner-modal').style.display = 'none';
-            if (html5QrcodeScanner) html5QrcodeScanner.clear();
+
+            // Stop Native
+            if (nativeStream) {
+                nativeStream.getTracks().forEach(track => track.stop());
+                nativeStream = null;
+            }
+
+            // Stop Legacy
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(e => console.error(e));
+                html5QrcodeScanner = null;
+            }
         }
     </script>
     {% endblock %}
