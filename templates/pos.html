@@ -299,9 +299,54 @@
             }
 
             if (found) {
-                addToCart(found);
-                showScanFeedback(found.name, true);
+                // STOP SCANNER IMMEDIATELLY
+                closeScanner();
+
+                // Prompt for Quantity
+                Swal.fire({
+                    title: found.name,
+                    text: 'Ingrese la cantidad a vender:',
+                    input: 'number',
+                    inputValue: document.getElementById('pos-qty').value || 1,
+                    showCancelButton: true,
+                    confirmButtonText: 'Agregar',
+                    cancelButtonText: 'Cancelar',
+                    inputAttributes: {
+                        min: 1,
+                        step: 1
+                    },
+                    didOpen: () => {
+                        const input = Swal.getInput();
+                        input.select();
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        const qty = parseInt(result.value) || 1;
+                        if (qty > 0) {
+                            // Update input so addToCart picks it up
+                            document.getElementById('pos-qty').value = qty;
+                            addToCart(found);
+                            // Visual feedback (Toast)
+                            const Toast = Swal.mixin({
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: false,
+                                timer: 1500,
+                                timerProgressBar: true
+                            });
+                            Toast.fire({
+                                icon: 'success',
+                                title: `${qty}x ${found.name} agregado`
+                            });
+                        }
+                    }
+                });
+
             } else {
+                // Keep scanner open if not found? Or close to tell user?
+                // Usually better to keep scanning if miss-read, but if it read WRONG code, maybe alert.
+                // Let's vibrate and show feedback but NOT close, so they can try again if it was a partial read.
+                if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
                 showScanFeedback(`No encontrado: ${scanned}`, false);
             }
         }

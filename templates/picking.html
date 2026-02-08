@@ -230,18 +230,47 @@
         if (cleanCode.startsWith(']')) cleanCode = cleanCode.substring(cleanCode.indexOf(']') + 1);
 
         console.log(`Scan: ${cleanCode} (Raw: ${decodedText})`);
+        if (navigator.vibrate) navigator.vibrate(50);
 
-        // Visual feedback
-        // beep() // Optional
+        // Prompt for Quantity
+        const modeTitle = currentMode === 'entry' ? 'Entrada de Stock' : 'Salida de Mercadería';
 
-        if (currentMode === 'entry') {
-            await handleEntry(cleanCode);
-        } else {
-            await handleExit(cleanCode);
+        try {
+            // Pause scanner visually if possible or just rely on overlay
+            const { value: inputQty, isConfirmed } = await Swal.fire({
+                title: modeTitle,
+                html: `Producto detectado: <b>${cleanCode}</b><br>Ingrese cantidad:`,
+                input: 'number',
+                inputValue: 1,
+                showCancelButton: true,
+                confirmButtonText: 'Confirmar',
+                cancelButtonText: 'Cancelar',
+                inputAttributes: {
+                    min: 1,
+                    step: 1
+                },
+                didOpen: () => {
+                    const input = Swal.getInput();
+                    input.select();
+                }
+            });
+
+            if (isConfirmed && inputQty) {
+                const qty = parseInt(inputQty);
+                document.getElementById('picking-qty').value = qty;
+
+                if (currentMode === 'entry') {
+                    await handleEntry(cleanCode);
+                } else {
+                    await handleExit(cleanCode);
+                }
+            }
+        } catch (e) {
+            console.error("Error in prompt:", e);
         }
 
         // Wait a bit before next scan to prevent double scans
-        setTimeout(() => { isProcessing = false; }, 1500);
+        setTimeout(() => { isProcessing = false; }, 1000);
     }
 
     function onScanFailure(error) {
