@@ -38,7 +38,7 @@
 
     <!-- Daily Sales Summary -->
     <div style="margin-bottom: 32px;">
-        <h2 style="margin-bottom: 16px;">Registro de Ventas Diarias</h2>
+        <h2 style="margin-bottom: 16px;">Cierre de Ventas Diarios</h2>
         <div class="glass-card table-container" style="max-height: 300px; overflow-y: auto;">
             <table style="width: 100%;">
                 <thead>
@@ -49,7 +49,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for day in daily_sales %}
+                    {% for day in daily_reports %}
                     <tr>
                         <td style="font-weight: 500;">{{ day.date }}</td>
                         <td style="font-weight: bold; font-size: 1.1em;">${{ "%.2f"|format(day.total) }}</td>
@@ -67,65 +67,75 @@
         </div>
     </div>
 
-    <h2 style="margin-bottom: 24px;">Detalle de Ventas</h2>
+    <!-- Grouped Sales Detail -->
+    <h2 style="margin-bottom: 24px;">Detalle de Ventas por Día</h2>
 
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Vendedor</th>
-                    <th>Total</th>
-                    <th>Pagado</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                    <th>Items</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for sale in sales %}
-                <tr>
-                    <td>{{ sale.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
-                    <td>
-                        <!-- User relationship might need to be eager loaded or handled -->
-                        {% if sale.user_id %}Usuario #{{ sale.user_id }}{% else %}Sistema{% endif %}
-                    </td>
-                    <td style="font-weight: bold; color: var(--primary-color);">${{ "%.2f"|format(sale.total_amount) }}
-                    </td>
-                    <td>${{ "%.2f"|format(sale.amount_paid or 0) }}</td>
-                    <td>
-                        {% if sale.payment_status == 'paid' %}
-                        <span
-                            style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pagado</span>
-                        {% elif sale.payment_status == 'partial' %}
-                        <span
-                            style="background: #fef3c7; color: #d97706; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Parcial</span>
-                        {% else %}
-                        <span
-                            style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pendiente</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <a href="/sales/{{ sale.id }}/remito" target="_blank" class="btn-small"
-                            style="text-decoration: none; display: inline-block; padding: 4px 8px; background: #e0e7ff; color: #4338ca; border-radius: 4px; font-size: 0.8em;">
-                            📄 Remito
-                        </a>
-                    </td>
-                    <td>
-                        <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;">
-                            {% for item in sale.items %}
-                            <li>{{ item.quantity }}x {{ item.product_name }} (${{ item.unit_price }})</li>
-                            {% endfor %}
-                        </ul>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="4" style="text-align: center; padding: 20px;">No hay ventas registradas.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    {% for report in daily_reports %}
+    <div class="glass-card" style="margin-bottom: 24px;">
+        <div
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid rgba(0,0,0,0.1); padding-bottom: 8px;">
+            <h3 style="margin: 0; color: var(--primary-color);">{{ report.date }}</h3>
+            <span style="font-weight: bold; font-size: 1.1em;">Total: ${{ "%.2f"|format(report.total) }}</span>
+        </div>
+
+        <div class="table-container">
+            <table style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>Hora</th>
+                        <th>Vendedor</th>
+                        <th>Total</th>
+                        <th>Pagado</th>
+                        <th>Estado</th>
+                        <th>Acciones</th>
+                        <th>Items</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in report.sales %}
+                    <tr>
+                        <td>{{ sale.timestamp.strftime('%H:%M') }}</td>
+                        <td>
+                            {% if sale.user_id %}Usuario #{{ sale.user_id }}{% else %}Sistema{% endif %}
+                        </td>
+                        <td style="font-weight: bold;">${{ "%.2f"|format(sale.total_amount) }}</td>
+                        <td>${{ "%.2f"|format(sale.amount_paid or 0) }}</td>
+                        <td>
+                            {% if sale.payment_status == 'paid' %}
+                            <span
+                                style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pagado</span>
+                            {% elif sale.payment_status == 'partial' %}
+                            <span
+                                style="background: #fef3c7; color: #d97706; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Parcial</span>
+                            {% else %}
+                            <span
+                                style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pendiente</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="/sales/{{ sale.id }}/remito" target="_blank" class="btn-small"
+                                style="text-decoration: none; display: inline-block; padding: 4px 8px; background: #e0e7ff; color: #4338ca; border-radius: 4px; font-size: 0.8em;">
+                                📄 Remito
+                            </a>
+                        </td>
+                        <td>
+                            <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;">
+                                {% for item in sale.items %}
+                                <li>{{ item.quantity }}x {{ item.product_name }} (${{ item.unit_price }})</li>
+                                {% endfor %}
+                            </ul>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
+    {% else %}
+    <div class="glass-card">
+        <p style="text-align: center; color: #666;">No hay ventas registradas.</p>
+    </div>
+    {% endfor %}
+
 </div>
 {% endblock %}

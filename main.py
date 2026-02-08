@@ -184,24 +184,31 @@ def get_sales_page(request: Request, user: User = Depends(require_auth), setting
     sales = session.exec(select(Sale).order_by(Sale.timestamp.desc())).all()
     low_stock_products = session.exec(select(Product).where(Product.stock_quantity < Product.min_stock_level)).all()
     
-    # Calculate Daily Sales Totals
-    # We do this in Python to avoid complex SQL grouping with SQLite/SQLModel which can be tricky with timezone awareness
+    # Group Sales by Date
     from collections import defaultdict
-    daily_stats = defaultdict(float)
+    daily_groups = defaultdict(list)
     
     for sale in sales:
         date_str = sale.timestamp.strftime('%Y-%m-%d')
-        daily_stats[date_str] += sale.total_amount
+        daily_groups[date_str].append(sale)
         
-    # Convert to list of dicts for template
-    daily_sales = [{"date": k, "total": v} for k, v in daily_stats.items()]
-    # Sort by date desc
-    daily_sales.sort(key=lambda x: x['date'], reverse=True)
+    # Create structured reports
+    daily_reports = []
+    for date_str, day_sales in daily_groups.items():
+        total = sum(s.total_amount for s in day_sales)
+        daily_reports.append({
+            "date": date_str,
+            "total": total,
+            "sales": day_sales # Preserves existing sort order (desc)
+        })
+        
+    # Sort reports by date desc
+    daily_reports.sort(key=lambda x: x['date'], reverse=True)
 
     return templates.TemplateResponse("sales.html", {
         "request": request, "active_page": "sales", "settings": settings, "user": user, 
         "sales": sales, "low_stock_products": low_stock_products,
-        "daily_sales": daily_sales
+        "daily_reports": daily_reports 
     })
 
 @app.get("/settings", response_class=HTMLResponse)
