@@ -201,24 +201,41 @@
                 video.srcObject = stream;
                 await new Promise(r => video.onloadedmetadata = r);
 
-                // 3. Init Detector
-                const barcodeDetector = new BarcodeDetector({ formats: ['ean_13', 'code_128', 'qr_code', 'ean_8'] });
+                // 3. Init Detector with robust formats
+                const formats = ['ean_13', 'code_128', 'qr_code', 'ean_8', 'upc_a', 'upc_e', 'codabar', 'itf'];
+                let barcodeDetector;
+                try {
+                    barcodeDetector = new BarcodeDetector({ formats: formats });
+                } catch (e) {
+                    console.warn("BarcodeDetector Init Failed (formats?), trying default:", e);
+                    barcodeDetector = new BarcodeDetector(); // Try auto-detect
+                }
 
                 // 4. Scan Loop (Every 100ms)
+                let frameCount = 0;
                 const scanLoop = async () => {
                     if (!nativeStream) return; // Stop if closed
+                    frameCount++;
+
                     try {
                         const barcodes = await barcodeDetector.detect(video);
                         if (barcodes.length > 0) {
                             const code = barcodes[0].rawValue;
                             console.log("🔫 Scanned (Native):", code);
+
+                            // Visual Feedback Immediate
+                            const feedback = document.createElement("div");
+                            feedback.innerHTML = `✅ ${code}`;
+                            feedback.style.cssText = "position: absolute; top: 10px; right: 10px; background: #0f0; color: black; padding: 4px; font-weight:bold;";
+                            container.querySelector('div').appendChild(feedback);
+                            setTimeout(() => feedback.remove(), 1000);
+
                             onScanSuccess(code);
-                            // Optional: Beep or haptic feedback
-                            if (navigator.vibrate) navigator.vibrate(200);
-                            await new Promise(r => setTimeout(r, 1000)); // Debounce 1s
+                            if (navigator.vibrate) navigator.vibrate(50);
+                            await new Promise(r => setTimeout(r, 800)); // Debounce
                         }
                     } catch (e) {
-                        console.error("Detection failed:", e);
+                        // Silent fail on some frames is normal
                     }
                     if (nativeStream) requestAnimationFrame(scanLoop);
                 };
