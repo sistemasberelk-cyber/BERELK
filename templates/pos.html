@@ -182,13 +182,23 @@
         // --- OPTION A: GOOGLE NATIVE (SUPER FAST) ---
         async function startNativeScanner(container) {
             try {
-                // 1. Setup Video Element
+                // 1. Setup Video Element (CENTERED & FIT)
                 container.innerHTML = `
-                    <div style="position: relative; width: 100%; height: 300px; background: black; overflow: hidden; border-radius: 8px;">
-                        <video id="native-video" autoplay playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>
-                        <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); color: #0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px;">⚡ Google ML Active</div>
-                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; height: 40%; border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 0 0 1000px rgba(0,0,0,0.5);"></div>
+                    <div style="position: relative; width: 100%; height: 400px; background: black; display: flex; justify-content: center; align-items: center; overflow: hidden; border-radius: 12px;">
+                        <video id="native-video" autoplay playsinline style="width: 100%; height: 100%; object-fit: contain;"></video>
+                        
+                        <!-- HUD Overlay -->
+                        <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); color: #0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px; z-index: 10;">
+                            ⚡ Google ML
+                        </div>
+                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70%; height: 30%; border: 2px solid rgba(255,255,255,0.6); box-shadow: 0 0 0 1000px rgba(0,0,0,0.5); pointer-events: none;"></div>
                     </div>
+                    
+                    <!-- "ENTER" / CLOSE BUTTON -->
+                    <button onclick="closeScanner()" class="btn" style="width: 100%; margin-top: 16px; background: #10b981; color: white; padding: 16px; font-size: 1.2rem; font-weight: bold;">
+                        ✅ LISTO / CERRAR
+                    </button>
+                    <div style="text-align: center; margin-top: 8px; color: #666; font-size: 0.9rem;">Escanea múltiples productos seguidos</div>
                 `;
                 const video = document.getElementById('native-video');
 
@@ -226,8 +236,8 @@
                             // Visual Feedback Immediate
                             const feedback = document.createElement("div");
                             feedback.innerHTML = `✅ ${code}`;
-                            feedback.style.cssText = "position: absolute; top: 10px; right: 10px; background: #0f0; color: black; padding: 4px; font-weight:bold;";
-                            container.querySelector('div').appendChild(feedback);
+                            feedback.style.cssText = "position: absolute; top: 10px; right: 10px; background: #0f0; color: black; padding: 4px 8px; border-radius: 4px; font-weight:bold; z-index: 20;";
+                            container.querySelector('div').appendChild(feedback); // Append to relative container
                             setTimeout(() => feedback.remove(), 1000);
 
                             onScanSuccess(code);
