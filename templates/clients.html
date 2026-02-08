@@ -95,73 +95,104 @@
 <!-- Modal -->
 <div id="client-modal"
     style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 100; justify-content: center; align-items: center;">
-    <div class="glass-card" style="width: 100%; max-width: 500px; background: white;">
+    <div class="glass-card"
+        style="width: 95%; max-width: 900px; background: white; max-height: 90vh; overflow-y: auto;">
         <h3 id="modal-title" style="margin-bottom: 24px;">Nuevo Cliente</h3>
         <form id="client-form" onsubmit="submitClient(event)">
             <input type="hidden" id="edit-id" name="id">
 
-            <!-- New Fields Grid -->
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Razón Social</label>
-            <input type="text" id="c-razon-social" name="razon_social" placeholder="Empresa S.A.">
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start;">
+                <!-- Left Column: Commercial Info -->
                 <div>
-                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">CUIT</label>
-                    <input type="text" id="c-cuit" name="cuit" placeholder="20-12345678-9">
-                </div>
-                <div>
-                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Condición IVA</label>
-                    <select id="c-iva" name="iva_category"
-                        style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: rgba(255,255,255,0.9);">
-                        <option value="">Seleccionar...</option>
-                        <option value="Resp. Inscripto">Resp. Inscripto</option>
-                        <option value="Monotributo">Monotributo</option>
-                        <option value="Consumidor Final">Consumidor Final</option>
-                        <option value="Exento">Exento</option>
-                    </select>
-                </div>
-            </div>
+                    <h4
+                        style="margin-bottom: 16px; color: var(--primary-color); font-size: 1em; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+                        Datos Fiscales y Contacto</h4>
 
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre Completo (Contacto)</label>
-            <input type="text" id="c-name" name="name" required placeholder="Juan Pérez">
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Razón Social / Empresa</label>
+                    <input type="text" id="c-razon-social" name="razon_social" placeholder="Empresa S.A."
+                        style="font-weight: bold; margin-bottom: 16px;">
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                <div>
-                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Teléfono</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <div>
+                            <label style="display: block; margin-bottom: 4px; font-weight: 500;">CUIT</label>
+                            <input type="text" id="c-cuit" name="cuit" placeholder="20-12345678-9">
+                        </div>
+                        <div>
+                            <label style="display: block; margin-bottom: 4px; font-weight: 500;">Condición IVA</label>
+                            <select id="c-iva" name="iva_category"
+                                style="width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; background: white;">
+                                <option value="">Seleccionar...</option>
+                                <option value="Resp. Inscripto">Resp. Inscripto</option>
+                                <option value="Monotributo">Monotributo</option>
+                                <option value="Consumidor Final">Consumidor Final</option>
+                                <option value="Exento">Exento</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <label style="display: block; margin-bottom: 8px; font-weight: 600;">Nombre Completo (Contacto
+                        Principal)</label>
+                    <input type="text" id="c-name" name="name" required placeholder="Juan Pérez"
+                        style="margin-bottom: 16px;">
+
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Teléfono / WhatsApp</label>
                     <input type="text" id="c-phone" name="phone" placeholder="+54 9 11 1234-5678">
                 </div>
+
+                <!-- Right Column: Logistics & Finance -->
                 <div>
-                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Límite Crédito ($)</label>
-                    <input type="number" step="0.01" id="c-limit" name="credit_limit" placeholder="Opcional">
+                    <h4
+                        style="margin-bottom: 16px; color: var(--primary-color); font-size: 1em; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+                        Ubicación y Finanzas</h4>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                        <div style="grid-column: span 2;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Límite Crédito
+                                ($)</label>
+                            <input type="number" step="0.01" id="c-limit" name="credit_limit" placeholder="Opcional"
+                                style="border-color: #10b981;">
+                        </div>
+                    </div>
+
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Email Facturación</label>
+                    <input type="email" id="c-email" name="email" placeholder="juan@ejemplo.com"
+                        style="margin-bottom: 16px;">
+
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Dirección Entrega</label>
+                    <input type="text" id="c-address" name="address" placeholder="Calle Falsa 123"
+                        style="margin-bottom: 24px;">
+
+                    <!-- Transport Box -->
+                    <div style="background: #f9fafb; padding: 16px; border-radius: 12px; border: 1px solid #e5e7eb;">
+                        <h5
+                            style="margin-top: 0; margin-bottom: 12px; color: #6b7280; font-size: 0.85em; text-transform: uppercase; font-weight: 700;">
+                            Datos de Transporte</h5>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
+                            <div>
+                                <label
+                                    style="display: block; margin-bottom: 4px; font-size: 0.9em; font-weight: 500;">Nombre
+                                    Transporte</label>
+                                <input type="text" id="c-transport-name" name="transport_name" placeholder="Expreso..."
+                                    style="font-size: 0.9em;">
+                            </div>
+                            <div>
+                                <label
+                                    style="display: block; margin-bottom: 4px; font-size: 0.9em; font-weight: 500;">Dirección
+                                    Transporte</label>
+                                <input type="text" id="c-transport-address" name="transport_address"
+                                    placeholder="Av. Transporte 123" style="font-size: 0.9em;">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Email</label>
-            <input type="email" id="c-email" name="email" placeholder="juan@ejemplo.com">
-
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Dirección</label>
-            <input type="text" id="c-address" name="address" placeholder="Calle Falsa 123">
-
-            <!-- Transport -->
-            <h4
-                style="margin-top: 16px; margin-bottom: 8px; color: var(--text-muted); font-size: 0.9em; text-transform: uppercase;">
-                Datos de Transporte</h4>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                <div>
-                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Nombre Transporte</label>
-                    <input type="text" id="c-transport-name" name="transport_name" placeholder="Expreso...">
-                </div>
-                <div>
-                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Dirección Transporte</label>
-                    <input type="text" id="c-transport-address" name="transport_address"
-                        placeholder="Av. Transporte 123">
-                </div>
-            </div>
-
-            <div style="margin-top: 24px; text-align: right;">
+            <div style="margin-top: 32px; text-align: right; display: flex; justify-content: flex-end; gap: 12px;">
                 <button type="button" onclick="closeModal()" class="btn"
-                    style="background: transparent; color: #666; margin-right: 8px; border: 1px solid #ccc;">Cancelar</button>
-                <button type="submit" class="btn">Guardar</button>
+                    style="background: white; color: #666; border: 1px solid #e5e7eb; padding: 10px 24px;">Cancelar</button>
+                <button type="submit" class="btn"
+                    style="padding: 10px 32px; font-size: 1rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">💾
+                    Guardar Cliente</button>
             </div>
         </form>
     </div>
