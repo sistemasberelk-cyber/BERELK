@@ -12,3 +12,6 @@ bcrypt
 psycopg2-binary
 itsdangerous
 supabase
+
+pandas
+openpyxl
