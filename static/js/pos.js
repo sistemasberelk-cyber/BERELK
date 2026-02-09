@@ -114,7 +114,15 @@ function addToCart(product) {
     const qtyInput = document.getElementById('pos-qty');
     const qty = parseInt(qtyInput.value) || 1;
 
-    const existing = cart.find(item => item.product_id === product.id);
+    const useBulk = document.getElementById('use-bulk-price') && document.getElementById('use-bulk-price').checked;
+
+    // Determine Price
+    let finalPrice = product.price;
+    if (useBulk && product.price_bulk && product.price_bulk > 0) {
+        finalPrice = product.price_bulk;
+    }
+
+    const existing = cart.find(item => item.product_id === product.id && item.unit_price === finalPrice);
     if (existing) {
         existing.quantity += qty;
     } else {
@@ -122,7 +130,7 @@ function addToCart(product) {
             product_id: product.id,
             product_name: product.name,
             item_number: product.item_number, // Pass item number
-            unit_price: product.price,
+            unit_price: finalPrice,
             quantity: qty
         });
     }
