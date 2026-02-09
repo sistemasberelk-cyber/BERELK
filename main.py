@@ -893,6 +893,13 @@ async def import_products(file: UploadFile = File(...), session: Session = Depen
                 updated += 1
             else:
                 # Create
+                should_generate = False
+                if not barcode:
+                    should_generate = True
+                    # Temp placeholder to satisfy NOT NULL constraint during flush
+                    import uuid
+                    barcode = f"TMP-{uuid.uuid4().hex[:8]}"
+
                 prod = Product(
                     name=name,
                     price=price,
@@ -907,6 +914,12 @@ async def import_products(file: UploadFile = File(...), session: Session = Depen
                     price_bulk=price_bulk
                 )
                 session.add(prod)
+                
+                if should_generate:
+                    session.flush()
+                    prod.barcode = str(prod.id).zfill(8)
+                    session.add(prod)
+                    
                 added += 1
                 
         except Exception as e:
