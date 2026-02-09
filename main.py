@@ -1372,6 +1372,10 @@ def reset_inventory_from_excel(session: Session = Depends(get_session), user: Us
 
                 price_bulk_raw = row.get('PriceBulk')
                 price_bulk = get_float(price_bulk_raw, None) if not pd.isna(price_bulk_raw) else None
+                
+                # Auto-calculate Price Bulk if missing (User Request: Unit Price * 12)
+                if price_bulk is None and price is not None:
+                    price_bulk = price * 12
 
                 prod = Product(
                     name=name,
