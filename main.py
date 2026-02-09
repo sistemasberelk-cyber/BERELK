@@ -1294,3 +1294,113 @@ def update_settings_api(
     db.add(current_settings)
     db.commit()
     return current_settings
+
+@app.get("/api/admin/reset-inventory-from-excel")
+def reset_inventory_from_excel(session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    if user.role != "admin": raise HTTPException(403)
+    
+    import pandas as pd
+    import os
+    import io
+    from sqlmodel import text
+    from database.models import Product  # Ensure Product is imported
+
+    # Check for file
+    file_path = "productos.xlsx"
+    if not os.path.exists(file_path):
+        return {"error": "File 'productos.xlsx' not found on server root"}
+        
+    try:
+        # 1. Clear Products
+        session.exec(text("DELETE FROM product")) # Be careful with table name casing. Usually lowercase in sqlmodel/sqlalchemy if not specified.
+        # However, to be safe, we can use session.exec(delete(Product)) but that requires importing delete.
+        # Let's try explicit delete via ORM to cascade if needed, or raw SQL for speed.
+        # Raw SQL "DELETE FROM product" assumes table name 'product'. SQLModel defaults to class name lowercase.
+        
+        # 2. Read Excel
+        df = pd.read_excel(file_path)
+        
+        added = 0
+        errors = []
+        
+        # Safe Helpers
+        def get_int(val, default=0):
+            if pd.isna(val): return default
+            try: return int(float(val))
+            except: return default
+
+        def get_float(val, default=0.0):
+            if pd.isna(val): return default
+            try: return float(val)
+            except: return default
+        
+        def get_str(col):
+            val = row.get(col)
+            if pd.isna(val): return None
+            s = str(val).strip()
+            return s if s.lower() != 'nan' else None
+
+        for index, row in df.iterrows():
+            try:
+                name = str(row.get('Name', '')).strip()
+                # Skip invalid names
+                if not name or name.lower() == 'nan' or pd.isna(name): continue
+                
+                barcode = str(row.get('Barcode', '')).strip()
+                if pd.isna(barcode) or barcode.lower() == 'nan': 
+                     barcode = None
+                
+                should_generate = False
+                if not barcode:
+                    should_generate = True
+                    import uuid
+                    barcode = f"TMP-{uuid.uuid4().hex[:8]}"
+
+                category = get_str('Category')
+                description = get_str('Description')
+                numeracion = get_str('Numeracion')
+                item_number = get_str('ItemNumber')
+                
+                cant_bulto_raw = row.get('CantBulto')
+                cant_bulto = get_int(cant_bulto_raw, None) if not pd.isna(cant_bulto_raw) else None
+                
+                stock = get_int(row.get('Stock'), 0)
+                price = get_float(row.get('Price'), 0.0)
+                
+                price_retail_raw = row.get('PriceRetail')
+                price_retail = get_float(price_retail_raw, None) if not pd.isna(price_retail_raw) else None
+
+                price_bulk_raw = row.get('PriceBulk')
+                price_bulk = get_float(price_bulk_raw, None) if not pd.isna(price_bulk_raw) else None
+
+                prod = Product(
+                    name=name,
+                    price=price,
+                    stock_quantity=stock,
+                    barcode=barcode,
+                    category=category,
+                    description=description,
+                    numeracion=numeracion,
+                    cant_bulto=cant_bulto,
+                    item_number=item_number,
+                    price_retail=price_retail,
+                    price_bulk=price_bulk
+                )
+                session.add(prod)
+                
+                if should_generate:
+                    session.flush()
+                    prod.barcode = str(prod.id).zfill(8)
+                    session.add(prod)
+                    
+                added += 1
+                
+            except Exception as e:
+                errors.append(f"Row {index}: {str(e)}")
+        
+        session.commit()
+        return {"status": "success", "message": f"Inventory Reset. Added {added} products.", "errors": errors}
+        
+    except Exception as e:
+        session.rollback()
+        return {"error": str(e)}
