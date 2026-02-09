@@ -3,10 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Imprimir Etiquetas 100x65mm</title>
+    <title>Imprimir Etiquetas 100x60mm</title>
     <style>
         @page {
-            size: 100mm 65mm;
+            size: 100mm 60mm;
             /* NEW SIZE */
             margin: 0;
         }
@@ -35,12 +35,11 @@
         }
 
         /* ----------------------------------------------------
-           CARD DESIGN (100mm x 65mm)
+           CARD DESIGN (100mm x 60mm)
            ---------------------------------------------------- */
         .label {
             width: 100mm;
-            height: 65mm;
-            /* Updated Height */
+            height: 60mm;
             box-sizing: border-box;
             background: white;
             position: relative;
@@ -86,8 +85,7 @@
             font-weight: 700;
             text-align: center;
             line-height: 1.1;
-            max-height: 18mm;
-            /* Slightly more height allowed */
+            max-height: 16mm;
             /* Limit height */
             overflow: hidden;
             text-overflow: ellipsis;
@@ -183,8 +181,8 @@
 
 <body>
     <div class="no-print">
-        <h2>Vista Previa (100mm x 65mm)</h2>
-        <p>⚠️ Configura tu impresora en tamaño <b>100mm x 65mm</b>.</p>
+        <h2>Vista Previa (100mm x 60mm)</h2>
+        <p>⚠️ Configura tu impresora en tamaño <b>100mm x 60mm</b> (o "4x2.5 inches") sin márgenes.</p>
         <button onclick="window.print()"
             style="padding: 12px 24px; font-size: 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 6px; font-weight: bold;">
             🖨️ IMPRIMIR AHORA

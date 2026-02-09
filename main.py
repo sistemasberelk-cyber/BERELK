@@ -108,6 +108,33 @@ def get_products_page(request: Request, user: User = Depends(require_auth), sett
     products = session.exec(select(Product)).all()
     return templates.TemplateResponse("products.html", {"request": request, "active_page": "products", "settings": settings, "user": user, "products": products})
 
+@app.get("/products/labels-100x60", response_class=HTMLResponse)
+def print_labels_100x60(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
+    # Get all products (or filtering logic could be added)
+    products = session.exec(select(Product)).all()
+    
+    # Prepare data for template
+    labels_data = []
+    for p in products:
+        # Only print if barcode exists (or generate on fly? For now only existing)
+        if p.barcode:
+            # Ensure barcode image exists
+            stock_service.generate_barcode(p.id) # Helper to ensure file exists
+            
+            labels_data.append({
+                "name": p.name,
+                "barcode": p.barcode,
+                "barcode_file": f"{p.barcode}.png",
+                "price": p.price or 0.0,
+                "item_number": p.item_number,
+                "category": p.category,
+                "description": p.description,
+                "numeracion": p.numeracion,
+                "cant_bulto": p.cant_bulto
+            })
+            
+    return templates.TemplateResponse("labels_100x60.html", {"request": request, "labels": labels_data})
+
 @app.get("/clients", response_class=HTMLResponse)
 def get_clients_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
     clients = session.exec(select(Client)).all()
@@ -474,10 +501,13 @@ async def print_labels(request: Request, session: Session = Depends(get_session)
                     "barcode_file": img_filename,
                     "item_number": product.item_number,
                     "numeracion": product.numeracion,
-                    "cant_bulto": product.cant_bulto
+                    "cant_bulto": product.cant_bulto,
+                    "category": product.category,
+                    "description": product.description
                 })
     
     template_name = "print_layout_exhibition.html" if label_type == "exhibition" else "print_layout.html"
+        
     return templates.TemplateResponse(template_name, {"request": request, "labels": labels_to_print})
 
 # --- Clients ---
@@ -1006,6 +1036,42 @@ def delete_user(id: int, session: Session = Depends(get_session), user: User = D
         session.delete(target)
         session.commit()
     return {"ok": True}
+
+class BulkPriceUpdate(BaseModel):
+    update_type: str  # "all" or "list"
+    percentage: float # 10.0 for 10%, -5.0 for discount
+    product_ids: Optional[List[int]] = None
+
+@app.post("/api/products/bulk-update-price")
+def bulk_update_price(
+    data: BulkPriceUpdate,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_auth)
+):
+    if user.role != "admin": raise HTTPException(403, "Solo administradores")
+    
+    products = []
+    if data.update_type == "all":
+        products = session.exec(select(Product)).all()
+    elif data.update_type == "list":
+        if not data.product_ids or len(data.product_ids) == 0:
+            raise HTTPException(400, "No se seleccionaron productos")
+        products = session.exec(select(Product).where(Product.id.in_(data.product_ids))).all()
+    else:
+        raise HTTPException(400, "Tipo de actualización inválido")
+        
+    multiplier = 1 + (data.percentage / 100.0)
+    count = 0
+    
+    for p in products:
+        # Check if price is None (shouldn't be, but safety)
+        if p.price is not None:
+            p.price = round(p.price * multiplier, 2)
+            session.add(p)
+            count += 1
+            
+    session.commit()
+    return {"status": "success", "updated_count": count}
 
 # Taxes
 @app.get("/api/taxes")
