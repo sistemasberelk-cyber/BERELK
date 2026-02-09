@@ -824,37 +824,49 @@ async def import_products(file: UploadFile = File(...), session: Session = Depen
     updated = 0
     errors = []
     
-    # Expected: Name, Price, Stock. Optional: Barcode, Category, Description, CantBulto, Numeracion, ItemNumber, PriceRetail, PriceBulk
     for index, row in df.iterrows():
         try:
+            # Safe Helpers
+            def get_int(val, default=0):
+                if pd.isna(val): return default
+                try: return int(float(val))
+                except: return default
+
+            def get_float(val, default=0.0):
+                if pd.isna(val): return default
+                try: return float(val)
+                except: return default
+
             name = str(row.get('Name', '')).strip()
-            if not name or pd.isna(name): continue
+            if not name or name.lower() == 'nan' or pd.isna(name): continue
             
             barcode = str(row.get('Barcode', '')).strip()
-            if pd.isna(barcode) or barcode == 'nan': barcode = None
+            if pd.isna(barcode) or barcode.lower() == 'nan': barcode = None
             
             # Helper to get optional fields safely
-            def get_val(col, default=None):
+            def get_str(col):
                 val = row.get(col)
-                return str(val).strip() if not pd.isna(val) else default
+                if pd.isna(val): return None
+                s = str(val).strip()
+                return s if s.lower() != 'nan' else None
                 
-            category = get_val('Category')
-            description = get_val('Description')
-            numeracion = get_val('Numeracion')
-            item_number = get_val('ItemNumber')
+            category = get_str('Category')
+            description = get_str('Description')
+            numeracion = get_str('Numeracion')
+            item_number = get_str('ItemNumber')
             
-            cant_bulto = row.get('CantBulto')
-            if pd.isna(cant_bulto): cant_bulto = None
-            else: cant_bulto = int(cant_bulto)
+            cant_bulto_raw = row.get('CantBulto')
+            cant_bulto = get_int(cant_bulto_raw, None) if not pd.isna(cant_bulto_raw) else None
+            
+            stock = get_int(row.get('Stock'), 0)
+            price = get_float(row.get('Price'), 0.0)
             
             # New Price Fields
-            price_retail = row.get('PriceRetail')
-            if pd.isna(price_retail): price_retail = None
-            else: price_retail = float(price_retail)
+            price_retail_raw = row.get('PriceRetail')
+            price_retail = get_float(price_retail_raw, None) if not pd.isna(price_retail_raw) else None
 
-            price_bulk = row.get('PriceBulk')
-            if pd.isna(price_bulk): price_bulk = None
-            else: price_bulk = float(price_bulk)
+            price_bulk_raw = row.get('PriceBulk')
+            price_bulk = get_float(price_bulk_raw, None) if not pd.isna(price_bulk_raw) else None
             
             existing = None
             if barcode:
@@ -866,9 +878,9 @@ async def import_products(file: UploadFile = File(...), session: Session = Depen
 
             if existing:
                 # Update
-                existing.name = name # update name too
-                existing.price = float(row.get('Price', existing.price))
-                existing.stock_quantity = int(row.get('Stock', existing.stock_quantity))
+                existing.name = name 
+                existing.price = price
+                existing.stock_quantity = stock
                 if category: existing.category = category
                 if description: existing.description = description
                 if numeracion: existing.numeracion = numeracion
@@ -883,8 +895,8 @@ async def import_products(file: UploadFile = File(...), session: Session = Depen
                 # Create
                 prod = Product(
                     name=name,
-                    price=float(row.get('Price', 0)),
-                    stock_quantity=int(row.get('Stock', 0)),
+                    price=price,
+                    stock_quantity=stock,
                     barcode=barcode,
                     category=category,
                     description=description,
