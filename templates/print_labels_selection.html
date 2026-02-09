@@ -7,11 +7,10 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
         <h2>Impresor de Etiquetas</h2>
         <div style="display: flex; gap: 10px; align-items: center;">
-            <select name="label_type" form="printForm"
-                style="padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
-                <option value="standard">Etiqueta Bulto (Sin Precio)</option>
-                <option value="exhibition" selected>Etiqueta Exhibición (100x65mm)</option>
-            </select>
+            <div style="padding: 10px; background: #e0f2fe; color: #0369a1; border-radius: 8px; font-weight: bold;">
+                Formato: 100x65mm
+            </div>
+            <input type="hidden" name="label_type" value="exhibition" form="printForm">
             <button type="submit" form="printForm" class="btn">
                 🖨️ Generar Vista
             </button>
