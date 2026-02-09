@@ -447,7 +447,7 @@ def get_labels_page(request: Request, user: User = Depends(require_auth), settin
 async def print_labels(request: Request, session: Session = Depends(get_session)):
     form = await request.form()
     selected_ids = form.getlist("selected_products")
-    label_type = form.get("label_type", "standard")
+    label_type = form.get("label_type", "exhibition")
     
     labels_to_print = []
     
@@ -506,7 +506,10 @@ async def print_labels(request: Request, session: Session = Depends(get_session)
                     "description": product.description
                 })
     
-    template_name = "print_layout_exhibition.html" if label_type == "exhibition" else "print_layout.html"
+    if label_type == "standard":
+         template_name = "print_layout.html"
+    else:
+         template_name = "print_layout_exhibition.html"
         
     return templates.TemplateResponse(template_name, {"request": request, "labels": labels_to_print})
 
