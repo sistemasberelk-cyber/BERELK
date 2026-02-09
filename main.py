@@ -1515,3 +1515,188 @@ def reset_clients_from_excel(session: Session = Depends(get_session), user: User
         
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/api/admin/restore-history-from-local-db")
+def restore_history_from_local_db(session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    if user.role != "admin": raise HTTPException(403)
+    
+    import sqlite3
+    import os
+    
+    # Looking for backup file. Prioritize the safety backup if exists, else the standard one?
+    # User said "base de datos", implies nexpos.db
+    backup_file = "nexpos.db"
+    if not os.path.exists(backup_file):
+        return {"error": "Backup file 'nexpos.db' not found in backend root."}
+
+    log = []
+    con_bkp = None
+ 
+    try:
+        con_bkp = sqlite3.connect(backup_file)
+        con_bkp.row_factory = sqlite3.Row
+        cur_bkp = con_bkp.cursor()
+        
+        # 1. Restore Users (Skip if username exists)
+        try:
+            cur_bkp.execute("SELECT * FROM user")
+            users_bkp = cur_bkp.fetchall()
+            users_added = 0
+            
+            for u in users_bkp:
+                uname = u['username']
+                exists = session.exec(select(User).where(User.username == uname)).first()
+                if not exists:
+                    new_user = User(
+                        username=u['username'],
+                        password_hash=u['password_hash'],
+                        role=u['role'],
+                        full_name=u['full_name'],
+                        is_active=u['is_active'] if 'is_active' in u.keys() else True
+                    )
+                    session.add(new_user)
+                    users_added += 1
+            log.append(f"Users imported: {users_added}")
+        except Exception as e:
+            log.append(f"Users import skipping: {e}")
+
+        # 2. Restore Settings
+        try:
+             cur_bkp.execute("SELECT * FROM settings LIMIT 1")
+             setting_bkp = cur_bkp.fetchone()
+             if setting_bkp:
+                 current = session.exec(select(Settings)).first()
+                 if not current:
+                     current = Settings()
+                     session.add(current)
+                 
+                 current.company_name = setting_bkp['company_name']
+                 if 'printer_name' in setting_bkp.keys(): current.printer_name = setting_bkp['printer_name']
+                 if 'logo_url' in setting_bkp.keys(): current.logo_url = setting_bkp['logo_url']
+                 session.add(current)
+                 log.append("Settings updated.")
+        except Exception as e:
+             log.append(f"Settings import skipping: {e}")
+
+        session.commit() # Save users/settings first
+
+        # 3. Restore Sales & SaleItems
+        # BUILD MAPS (Old ID -> New ID)
+        
+        # User Map
+        user_map = {} 
+        for u in session.exec(select(User)).all():
+            # Find old ID? We don't have old ID stored.
+            # We must fetch by Username from backup again
+            # Or just fetch all backup users into a dict
+            pass
+        
+        # Let's rebuild map dynamically
+        cur_bkp.execute("SELECT * FROM user")
+        for old_u in cur_bkp.fetchall():
+            curr = session.exec(select(User).where(User.username == old_u['username'])).first()
+            if curr: user_map[old_u['id']] = curr.id
+
+        # Client Map (Name based)
+        client_map = {}
+        try:
+            cur_bkp.execute("SELECT * FROM client")
+            for old_c in cur_bkp.fetchall():
+                curr = session.exec(select(Client).where(Client.name == old_c['name'])).first()
+                if curr: client_map[old_c['id']] = curr.id
+        except: pass
+
+        # Product Map (Name/Barcode based)
+        product_map = {} # old_id -> new_id
+        # We need to map old saleitems product_id to new product_id
+        # BUT we only have access to SaleItems linked to products.
+        # So we iterate items, check old product ID -> get old Name -> find New ID.
+        # To make this fast, let's load all old products into memory?
+        old_products = {}
+        try:
+            cur_bkp.execute("SELECT id, name, barcode FROM product")
+            for op in cur_bkp.fetchall():
+                old_products[op['id']] = op
+        except: 
+            log.append("Warning: Could not read old products table. Sale linking might rely on item name snapshot.")
+
+        # Load new products map
+        new_products_by_name = {p.name: p for p in session.exec(select(Product)).all()}
+        new_products_by_barcode = {p.barcode: p for p in session.exec(select(Product)).all() if p.barcode}
+
+        # Fetch Sales
+        try:
+            cur_bkp.execute("SELECT * FROM sale")
+            sales_bkp = cur_bkp.fetchall()
+            sales_added = 0
+            
+            for s in sales_bkp:
+                # Check duplication? Timestamp + Total match?
+                # Simplified: just import.
+                
+                u_id = user_map.get(s['user_id'])
+                c_id = client_map.get(s['client_id'])
+                
+                new_sale = Sale(
+                    timestamp=datetime.now(), # Resetting timestamp? No, use original.
+                    # Parse timestamp format
+                    total_amount=s['total_amount'],
+                    payment_method=s['payment_method'],
+                    amount_paid=s['amount_paid'],
+                    payment_status=s['payment_status'] if 'payment_status' in s.keys() else 'paid',
+                    user_id=u_id,
+                    client_id=c_id
+                )
+                # Timestamp fix
+                try:
+                    ts_str = s['timestamp']
+                    if ts_str:
+                        new_sale.timestamp = datetime.fromisoformat(ts_str)
+                except: pass
+
+                session.add(new_sale)
+                session.flush()
+
+                # Items
+                cur_bkp.execute("SELECT * FROM saleitem WHERE sale_id = ?", (s['id'],))
+                items = cur_bkp.fetchall()
+                
+                for it in items:
+                    # Find new product ID
+                    # Strategy 1: Match ID? NO.
+                    # Strategy 2: Match Name (Snapshot in Item)
+                    p_name = it['product_name']
+                    new_p_id = None
+                    
+                    if p_name in new_products_by_name:
+                         new_p_id = new_products_by_name[p_name].id
+                    # Strategy 3: Old Product ID -> Barcode -> New Product
+                    elif it['product_id'] in old_products:
+                         op = old_products[it['product_id']]
+                         if op['barcode'] in new_products_by_barcode:
+                             new_p_id = new_products_by_barcode[op['barcode']].id
+                    
+                    new_item = SaleItem(
+                        sale_id=new_sale.id,
+                        product_id=new_p_id,
+                        product_name=p_name,
+                        quantity=it['quantity'],
+                        unit_price=it['unit_price'],
+                        total=it['total']
+                    )
+                    session.add(new_item)
+                
+                sales_added += 1
+                
+            log.append(f"Sales imported: {sales_added}")
+        except Exception as e:
+            log.append(f"Sales import failed: {e}")
+            
+        session.commit()
+        return {"status": "success", "log": log}
+        
+    except Exception as e:
+        session.rollback()
+        return {"error": str(e), "log": log}
+    finally:
+        if con_bkp: con_bkp.close()
