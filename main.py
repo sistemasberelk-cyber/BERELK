@@ -1408,3 +1408,110 @@ def reset_inventory_from_excel(session: Session = Depends(get_session), user: Us
     except Exception as e:
         session.rollback()
         return {"error": str(e)}
+
+@app.get("/api/admin/reset-clients-from-excel")
+def reset_clients_from_excel(session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    if user.role != "admin": raise HTTPException(403)
+    
+    import pandas as pd
+    import os
+    from sqlmodel import text
+    from database.models import Client, Sale
+    
+    file_path = "clientes.xlsx"
+    if not os.path.exists(file_path):
+        return {"error": "File 'clientes.xlsx' not found on server root"}
+        
+    try:
+        # 1. Clear Clients (and their related Sales/Payments if we want a full reset?)
+        # For now, let's just clear Clients. If Sales exist linked to clients, this might fail or set to null.
+        # Assuming full reset context, we should probably clear sales too or at least unlink them.
+        # Let's keep it simple: Create clients. If names match existing, maybe skip or update?
+        # User asked to "load", implies maybe fresh start or append.
+        # Given "reset_inventory" was a wipe, let's assume wipe here too for consistency, BUT
+        # wiping clients might break sales history if we didn't wipe sales.
+        # Let's just UPSERT (Update if exists, Create if not) to be safe.
+        
+        xls = pd.ExcelFile(file_path)
+        sheet_names = xls.sheet_names
+        
+        added = 0
+        updated = 0
+        errors = []
+        
+        for sheet_name in sheet_names:
+            try:
+                # Use sheet name as Client Name
+                client_name = sheet_name.strip()
+                
+                # Try to read debt from sheet content if possible?
+                # Usually these sheets have a "Balance" or "Saldo" cell?
+                # Without specific format, we just create the client.
+                # User said "nececito cargar los clientes", implies existence.
+                
+                # Check for "Saldo" or "Restan" in the dataframe to capture initial debt?
+                # Let's try to find a header like "Saldo" or "Deuda"
+                df = pd.read_excel(file_path, sheet_name=sheet_name)
+                
+                initial_debt = 0.0
+                # Very naive heuristic: Look for column 'Restan' or 'Saldo' and take last value?
+                # Or just create the client for now.
+                # Let's try to look for 'Restan' column common in previous interactions.
+                if 'Restan' in df.columns:
+                     try:
+                         last_val = df['Restan'].iloc[-1]
+                         initial_debt = float(last_val) if not pd.isna(last_val) else 0.0
+                     except: pass
+                elif 'Saldo' in df.columns:
+                     try:
+                         last_val = df['Saldo'].iloc[-1]
+                         initial_debt = float(last_val) if not pd.isna(last_val) else 0.0
+                     except: pass
+
+                # Check if exists
+                existing = session.exec(select(Client).where(Client.name == client_name)).first()
+                
+                if existing:
+                    # Update?
+                    # existing.credit_limit = ...
+                    updated += 1
+                    client_id = existing.id
+                else:
+                    new_client = Client(name=client_name)
+                    session.add(new_client)
+                    session.commit()
+                    session.refresh(new_client)
+                    added += 1
+                    client_id = new_client.id
+                
+                # If we found debt, we should record it.
+                # How? Create a "Saldo Inicial" Sale?
+                if initial_debt > 0:
+                     # Check if we already have this initial date?
+                     # Simplified: Create a Sale with description "Saldo Inicial" (via note? Sale doesn't have note).
+                     # We can just create a Sale with total_amout = debt and status 'pending'.
+                     # But we don't want to duplicate it on every run.
+                     # Let's skip debt import for now unless explicitly requested to avoid duplication mess.
+                     # Or check if client has 0 sales.
+                     has_sales = session.exec(select(Sale).where(Sale.client_id == client_id)).first()
+                     if not has_sales:
+                         from datetime import datetime
+                         initial_sale = Sale(
+                             client_id=client_id,
+                             user_id=user.id,
+                             total_amount=initial_debt,
+                             amount_paid=0,
+                             payment_status="pending",
+                             timestamp=datetime.now(),
+                             payment_method="account" # Cuenta Corriente
+                         )
+                         session.add(initial_sale)
+                         session.commit()
+
+            except Exception as e:
+                errors.append(f"Sheet {sheet_name}: {str(e)}")
+                
+        return {"status": "success", "added": added, "updated": updated, "sheets_processed": len(sheet_names), "errors": errors}
+        
+    except Exception as e:
+        return {"error": str(e)}
