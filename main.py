@@ -25,8 +25,43 @@ templates = Jinja2Templates(directory="templates")
 async def lifespan(app: FastAPI):
     # On startup
     create_db_and_tables()
-    # Seed Data
+    
+    # Run Auto-Migrations (Fixes "UndefinedColumn" errors on schema updates)
     session = next(get_session())
+    from sqlalchemy import text
+    
+    migration_statements = [
+        "ALTER TABLE settings ADD COLUMN tax_rate FLOAT DEFAULT 0.0;",
+        "ALTER TABLE settings ADD COLUMN label_width_mm INTEGER DEFAULT 60;",
+        "ALTER TABLE settings ADD COLUMN label_height_mm INTEGER DEFAULT 40;",
+        "ALTER TABLE product ADD COLUMN category TEXT;",
+        "ALTER TABLE product ADD COLUMN item_number TEXT;",
+        "ALTER TABLE product ADD COLUMN cant_bulto INTEGER;",
+        "ALTER TABLE product ADD COLUMN numeracion TEXT;",
+        "ALTER TABLE product ADD COLUMN price_retail FLOAT;",
+        "ALTER TABLE product ADD COLUMN price_bulk FLOAT;",
+        "ALTER TABLE client ADD COLUMN razon_social TEXT;",
+        "ALTER TABLE client ADD COLUMN cuit TEXT;",
+        "ALTER TABLE client ADD COLUMN iva_category TEXT;",
+        "ALTER TABLE client ADD COLUMN transport_name TEXT;",
+        "ALTER TABLE client ADD COLUMN transport_address TEXT;",
+        "ALTER TABLE sale ADD COLUMN amount_paid FLOAT DEFAULT 0;",
+        "ALTER TABLE sale ADD COLUMN payment_status TEXT DEFAULT 'paid';"
+    ]
+    
+    print("🚀 Checking/Running Schema Migrations...")
+    for stmt in migration_statements:
+        try:
+            session.exec(text(stmt))
+            session.commit()
+            print(f"✅ Executed: {stmt}")
+        except Exception as e:
+            session.rollback()
+            # Ignore "column already exists" errors, print others for debug
+            if "already exists" not in str(e) and "duplicate column" not in str(e):
+                 print(f"ℹ️ Skipped (likely exists): {stmt}")
+
+    # Seed Data
     AuthService.create_default_user_and_settings(session)
     seed_products(session)
     yield
