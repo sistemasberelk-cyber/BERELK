@@ -1428,17 +1428,84 @@ def seed_test_products(session: Session = Depends(get_session), user: User = Dep
     return {"status": "success", "added": added, "message": f"Se agregaron {added} productos de prueba."}
 
 # Settings
-@app.post("/api/settings")
-def update_settings_api(
-    company_name: str = Form(...), 
-    printer_name: Optional[str] = Form(None),
-    session: Session = Depends(get_settings), # gets settings obj
-    db: Session = Depends(get_session),
-    user: User = Depends(require_auth)
+@app.post("/print/labels/generate")
+def print_labels_v2(
+    request: Request,
+    selected_items: str = Form(...), # JSON string of IDs
+    layout_type: str = Form(...), # 'standard', 'exhibition', 'list'
+    hide_price: Optional[bool] = Form(False), # New field
+    settings: Settings = Depends(get_settings),
+    session: Session = Depends(get_session)
 ):
-    if user.role != "admin": raise HTTPException(403)
-    # 'session' here is the Settings object from dependency, not DB session
-    # Wait, get_settings returns Settings OBJECT.
+    import json
+    from sqlmodel import col
+    try:
+        item_ids = json.loads(selected_items)
+    except:
+        raise HTTPException(400, "Invalid JSON selection")
+        
+    products = session.exec(select(Product).where(col(Product.id).in_(item_ids))).all()
+    
+    # Prepare data for template
+    labels_data = []
+    
+    # Ensure barcodes exist as images
+    import os
+    from barcode import Code128
+    from barcode.writer import ImageWriter
+    
+    static_bc_path = "static/barcodes"
+    os.makedirs(static_bc_path, exist_ok=True)
+    
+    for p in products:
+        # Generate Barcode Image if not exists
+        bc_filename = f"{p.barcode}" # without extension for now, writer adds it
+        full_path = f"{static_bc_path}/{bc_filename}"
+        
+        # Check if file exists (Code128 writer adds .png)
+        if not os.path.exists(full_path + ".png"):
+            try:
+                # Generate
+                my_code = Code128(p.barcode, writer=ImageWriter())
+                my_code.save(full_path)
+            except Exception as e:
+                print(f"Error generating barcode for {p.name}: {e}")
+                
+        labels_data.append({
+            "name": p.name,
+            "price": p.price_retail if p.price_retail else p.price, # Use Retail price if set
+            "barcode": p.barcode,
+            "barcode_file": f"{p.barcode}.png",
+            "category": p.category,
+            "description": p.description,
+            "item_number": p.item_number
+        })
+        
+    if layout_type == "exhibition":
+        # 100x65mm (approx) - Exhibition cards
+        return templates.TemplateResponse("print_layout_exhibition.html", {"request": request, "labels": labels_data, "hide_price": hide_price})
+    elif layout_type == "list":
+        # A4 List (using PDF generation would be better, but HTML list for now)
+        html_content = """
+        <html><body style='font-family:sans-serif;'>
+        <h2>Lista de Precios</h2>
+        <table border='1' cellspacing='0' cellpadding='5' style='width:100%'>
+        <tr><th>Art #</th><th>Producto</th><th>Precio</th></tr>
+        """
+        for l in labels_data:
+            price_display = f"${l['price']}" if not hide_price else "-"
+            html_content += f"<tr><td>{l['item_number'] or ''}</td><td>{l['name']}</td><td>{price_display}</td></tr>"
+        html_content += "</table><script>window.print()</script></body></html>"
+        return HTMLResponse(html_content)
+    else:
+        # Standard configuration (Dynamic from Settings)
+        return templates.TemplateResponse("print_layout.html", {
+            "request": request, 
+            "labels": labels_data,
+            "w": settings.label_width_mm,
+            "h": settings.label_height_mm,
+            "hide_price": hide_price
+        })
 # --- Settings API ---
 @app.post("/api/settings")
 def update_settings(

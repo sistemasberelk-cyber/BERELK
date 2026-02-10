@@ -288,10 +288,13 @@
                     <img src="/static/barcodes/{{ item.barcode_file }}" class="barcode-img" alt="{{ item.barcode }}">
                     <div class="barcode-text">{{ item.barcode }}</div>
                 </div>
+
+                {% if not hide_price %}
                 <div class="price-container">
                     <div class="price-label">PRECIO</div>
                     <div class="price-value">${{ "{:,.0f}".format(item.price) }}</div>
                 </div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
