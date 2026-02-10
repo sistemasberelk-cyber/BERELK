@@ -1433,10 +1433,15 @@ def print_labels_v2(
     request: Request,
     selected_items: str = Form(...), # JSON string of IDs
     layout_type: str = Form(...), # 'standard', 'exhibition', 'list'
-    hide_price: Optional[bool] = Form(False), # New field
+    hide_price: Optional[str] = Form(None), # Changed to str to capture "true"/"on"/None
     settings: Settings = Depends(get_settings),
     session: Session = Depends(get_session)
 ):
+    # Manual conversion because checkbox default handling can be tricky
+    should_hide_price = False
+    if hide_price and str(hide_price).lower() in ["true", "on", "1", "yes"]:
+        should_hide_price = True
+
     import json
     from sqlmodel import col
     try:
@@ -1483,7 +1488,7 @@ def print_labels_v2(
         
     if layout_type == "exhibition":
         # 100x65mm (approx) - Exhibition cards
-        return templates.TemplateResponse("print_layout_exhibition.html", {"request": request, "labels": labels_data, "hide_price": hide_price})
+        return templates.TemplateResponse("print_layout_exhibition.html", {"request": request, "labels": labels_data, "hide_price": should_hide_price})
     elif layout_type == "list":
         # A4 List (using PDF generation would be better, but HTML list for now)
         html_content = """
@@ -1493,7 +1498,7 @@ def print_labels_v2(
         <tr><th>Art #</th><th>Producto</th><th>Precio</th></tr>
         """
         for l in labels_data:
-            price_display = f"${l['price']}" if not hide_price else "-"
+            price_display = f"${l['price']}" if not should_hide_price else "-"
             html_content += f"<tr><td>{l['item_number'] or ''}</td><td>{l['name']}</td><td>{price_display}</td></tr>"
         html_content += "</table><script>window.print()</script></body></html>"
         return HTMLResponse(html_content)
@@ -1504,7 +1509,7 @@ def print_labels_v2(
             "labels": labels_data,
             "w": settings.label_width_mm,
             "h": settings.label_height_mm,
-            "hide_price": hide_price
+            "hide_price": should_hide_price
         })
 # --- Settings API ---
 @app.post("/api/settings")
