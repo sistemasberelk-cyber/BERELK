@@ -3,74 +3,128 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Imprimir Etiquetas</title>
+    <title>Imprimir Etiquetas 60x40mm</title>
     <style>
         @page {
-            size: 50mm 25mm;
+            size: 60mm 40mm;
             margin: 0;
         }
 
         body {
-            font-family: sans-serif;
+            font-family: 'Arial', sans-serif;
             margin: 0;
             padding: 0;
         }
 
         .label-grid {
-            /* For screen viewing */
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
             padding: 10px;
+            background: #f0f0f0;
         }
 
         .label {
-            width: 50mm;
-            height: 25mm;
+            width: 60mm;
+            height: 40mm;
             box-sizing: border-box;
+            background: white;
+            position: relative;
+            overflow: hidden;
             border: 1px dashed #ccc;
-            /* Dashed for screen preview */
+            /* Border only for preview */
+
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            overflow: hidden;
-            background: white;
-            page-break-after: always;
-            /* Force new page for each label */
+            padding: 2mm;
         }
 
-        .label h3 {
+        /* LAYOUT GRID */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            height: 12mm;
+            margin-bottom: 1mm;
+        }
+
+        .item-number {
+            font-size: 10pt;
+            font-weight: bold;
+            background: #000;
+            color: #fff;
+            padding: 1px 4px;
+            border-radius: 2px;
+        }
+
+        .category {
             font-size: 8pt;
-            margin: 0;
+            color: #555;
+            text-transform: uppercase;
+            text-align: right;
+            max-width: 25mm;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            width: 100%;
-            padding: 0 2px;
         }
 
-        .label img {
-            width: 80%;
-            height: 12mm;
-            object-fit: contain;
+        .product-name {
+            font-size: 11pt;
+            font-weight: 700;
+            text-align: center;
+            line-height: 1.1;
+            height: 10mm;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            margin-bottom: 1mm;
         }
 
-        .label .barcode-text {
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: auto;
+        }
+
+        /* Barcode Left */
+        .barcode-container {
+            text-align: center;
+        }
+
+        .barcode-img {
+            height: 10mm;
+            max-width: 30mm;
+            display: block;
+        }
+
+        .barcode-text {
             font-size: 7pt;
-            margin: -2px 0 0 0;
+            font-family: monospace;
+            margin-top: -2px;
         }
 
-        .label .price {
-            font-weight: bold;
-            font-size: 9pt;
-            margin: 0;
+        /* Price Right */
+        .price-container {
+            text-align: right;
+        }
+
+        .price-label {
+            font-size: 6pt;
+            text-transform: uppercase;
+            color: #666;
+        }
+
+        .price-value {
+            font-size: 16pt;
+            font-weight: 900;
+            line-height: 1;
         }
 
         @media print {
             body {
-                padding: 0;
+                background: white;
             }
 
             .no-print {
@@ -80,13 +134,14 @@
             .label-grid {
                 display: block;
                 padding: 0;
+                background: white;
             }
 
             .label {
                 border: none;
-                /* Remove border for actual print */
-                margin: 0 auto;
+                margin: 0;
                 page-break-after: always;
+                page-break-inside: avoid;
             }
         }
     </style>
@@ -94,8 +149,8 @@
 
 <body>
     <div class="no-print" style="margin-bottom: 20px; text-align: center; padding: 20px;">
-        <h2>Vista Previa (Formato Zebra 50x25mm - v1.1)</h2>
-        <p>Asegúrate de configurar el tamaño de papel en las preferencias de impresión.</p>
+        <h2>Vista Previa (60mm x 40mm)</h2>
+        <p>Asegúrate de configurar el tamaño de papel en <b>60mm x 40mm</b> en tu impresora térmica.</p>
         <button onclick="window.print()"
             style="padding: 10px 20px; font-size: 16px; cursor: pointer; background: #2c3e50; color: white; border: none; border-radius: 4px;">🖨️
             Imprimir</button>
@@ -106,9 +161,27 @@
     <div class="label-grid">
         {% for item in labels %}
         <div class="label">
-            <h3>{{ item.name }}</h3>
-            <img src="/static/barcodes/{{ item.barcode_file }}" alt="{{ item.barcode }}">
-            <div class="barcode-text">{{ item.barcode }}</div>
+            <div class="header">
+                {% if item.item_number %}
+                <div class="item-number">#{{ item.item_number }}</div>
+                {% else %}
+                <div></div>
+                {% endif %}
+                <div class="category">{{ item.category or '' }}</div>
+            </div>
+
+            <div class="product-name">{{ item.name }}</div>
+
+            <div class="footer">
+                <div class="barcode-container">
+                    <img src="/static/barcodes/{{ item.barcode_file }}" class="barcode-img" alt="{{ item.barcode }}">
+                    <div class="barcode-text">{{ item.barcode }}</div>
+                </div>
+                <div class="price-container">
+                    <div class="price-label">PRECIO</div>
+                    <div class="price-value">${{ "{:,.0f}".format(item.price) }}</div>
+                </div>
+            </div>
         </div>
         {% endfor %}
     </div>
