@@ -15,3 +15,5 @@ supabase
 
 pandas
 openpyxl
+gspread
+oauth2client

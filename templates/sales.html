@@ -36,9 +36,29 @@
     </div>
     {% endif %}
 
-    <!-- Daily Sales Summary -->
+    <!-- Daily Sales Summary & Backup -->
     <div style="margin-bottom: 32px;">
-        <h2 style="margin-bottom: 16px;">Cierre de Ventas Diarios</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h2 style="margin: 0;">Reportes y Cierre de Caja</h2>
+
+            <form action="/sales/backup" method="POST"
+                onsubmit="return confirm('¿Estás seguro de cerrar la caja y enviar el backup a Google Sheets?');">
+                <button type="submit" class="btn-primary"
+                    style="background-color: #059669; font-weight: bold; padding: 10px 20px; display: flex; align-items: center; gap: 8px;">
+                    🔒 CERRAR CAJA Y ENVIAR BACKUP
+                </button>
+            </form>
+        </div>
+
+        <!-- Feedback Message -->
+        {% if backup_status %}
+        <div style="margin-bottom: 16px; padding: 12px; border-radius: 8px; font-weight: 500; 
+             background-color: {% if backup_status == 'success' %}#d1fae5{% else %}#fee2e2{% endif %}; 
+             color: {% if backup_status == 'success' %}#065f46{% else %}#b91c1c{% endif %};">
+            {{ backup_message }}
+        </div>
+        {% endif %}
+
         <div class="glass-card table-container" style="max-height: 300px; overflow-y: auto;">
             <table style="width: 100%;">
                 <thead>

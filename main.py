@@ -238,6 +238,44 @@ def get_sales_page(request: Request, user: User = Depends(require_auth), setting
         "daily_reports": daily_reports 
     })
 
+@app.post("/sales/backup", response_class=HTMLResponse)
+def trigger_backup(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
+    from services.backup_service import perform_backup
+    
+    # Run backup
+    result = perform_backup(session)
+    
+    # Reload sales data to render the page (duplicated logic, could be refactored)
+    sales = session.exec(select(Sale).order_by(Sale.timestamp.desc())).all()
+    low_stock_products = session.exec(select(Product).where(Product.stock_quantity < Product.min_stock_level)).all()
+    
+    from collections import defaultdict
+    daily_groups = defaultdict(list)
+    for sale in sales:
+        date_str = sale.timestamp.strftime('%Y-%m-%d')
+        daily_groups[date_str].append(sale)
+        
+    daily_reports = []
+    for date_str, day_sales in daily_groups.items():
+        total = sum(s.total_amount for s in day_sales)
+        daily_reports.append({
+            "date": date_str,
+            "total": total,
+            "sales": day_sales 
+        })
+    daily_reports.sort(key=lambda x: x['date'], reverse=True)
+    
+    status_msg = "success" if result["status"] == "success" else "error"
+    msg_text = "✅ Backup exitoso en Google Drive!" if result["status"] == "success" else f"❌ Error en Backup: {result['message']}"
+
+    return templates.TemplateResponse("sales.html", {
+        "request": request, "active_page": "sales", "settings": settings, "user": user, 
+        "sales": sales, "low_stock_products": low_stock_products,
+        "daily_reports": daily_reports,
+        "backup_status": status_msg,
+        "backup_message": msg_text
+    })
+
 @app.get("/settings", response_class=HTMLResponse)
 def get_settings_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings)):
     return templates.TemplateResponse("settings.html", {"request": request, "active_page": "settings", "settings": settings, "user": user})
@@ -1519,3 +1557,144 @@ def reset_clients_from_excel(session: Session = Depends(get_session), user: User
     except Exception as e:
         session.rollback()
         return {"error": str(e)}
+
+# --- Backup / Restore System ---
+
+@app.get("/api/admin/backup")
+def create_system_backup(session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    if user.role != "admin": raise HTTPException(403)
+    
+    from datetime import datetime
+    import json
+    
+    # 1. Fetch All Data
+    try:
+        data = {
+            "version": "1.0",
+            "timestamp": datetime.now().isoformat(),
+            "products": [p.model_dump() for p in session.exec(select(Product)).all()],
+            "clients": [c.model_dump() for c in session.exec(select(Client)).all()],
+            "users": [u.model_dump() for u in session.exec(select(User)).all()],
+            "settings": [s.model_dump() for s in session.exec(select(Settings)).all()],
+            "sales": [],
+            "sale_items": [],
+            "payments": [] 
+        }
+        
+        # Sales & Items needs care
+        sales = session.exec(select(Sale)).all()
+        for s in sales:
+            s_dict = s.model_dump()
+            # method_dump might exclude relationships or include them depending on config
+            # We want raw fields.
+            if s.timestamp: s_dict['timestamp'] = s.timestamp.isoformat()
+            data["sales"].append(s_dict)
+            
+        items = session.exec(select(SaleItem)).all()
+        for i in items:
+            data["sale_items"].append(i.model_dump())
+
+        payments = session.exec(select(Payment)).all()
+        for p in payments:
+            p_dict = p.model_dump()
+            if p.date: p_dict['date'] = p.date.isoformat()
+            data["payments"].append(p_dict)
+
+        return data
+        
+    except Exception as e:
+        return {"error": f"Backup failed: {str(e)}"}
+
+@app.post("/api/admin/restore")
+async def restore_system_backup(file: UploadFile = File(...), session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    if user.role != "admin": raise HTTPException(403)
+    
+    import json
+    from sqlmodel import text
+    
+    try:
+        content = await file.read()
+        data = json.loads(content)
+        
+        # VALIDATION
+        if "products" not in data or "clients" not in data:
+            return {"error": "Invalid backup format"}
+            
+        # 1. WIPE CURRENT STATE (Transactions first)
+        # We need to delete in correct order to avoid FK constraints if enforced
+        # SaleItem -> Sale
+        # Payment -> Client
+        # Product, User, Client
+        
+        # SQLModel doesn't always cascade nicely in all DBs without config.
+        # Let's try raw deletes.
+        session.exec(text("DELETE FROM saleitem"))
+        session.exec(text("DELETE FROM sale"))
+        session.exec(text("DELETE FROM payment"))
+        session.exec(text("DELETE FROM product"))
+        session.exec(text("DELETE FROM client"))
+        # We might want to keep the CURRENT admin user to not lock ourselves out?
+        # Or restore users but ensure current session user remains valid?
+        # If we wipe users, we might kill the session auth if it checks DB.
+        # Let's skip wiping Users for safety in this version, or update them.
+        # "users" export is there, but restoring might be tricky if password hashes change.
+        # User asked for "restore", usually implies 100% clone.
+        # Safe strategy: Restore Users but don't delete existing admin if not in backup?
+        # Simplest: Delete all users EXCEPT current one?
+        # Risk: Duplicate ID errors. 
+        # Better: Wipe Users table too, but re-add the current user if they disapper?
+        # Actually, if we restore, we restore the admin user from the backup too.
+        session.exec(text("DELETE FROM user")) 
+        session.exec(text("DELETE FROM settings"))
+        
+        session.commit()
+        
+        # 2. LOAD DATA
+        # Products
+        for p in data.get("products", []):
+            if 'id' in p: del p['id'] # Let DB auto-increment or keep IDs?
+            # Ideally keep IDs to maintain relationships if we import sales
+            # SQLModel/SQLAlchemy allows inserting IDs if explicitly set.
+            # Let's try to KEEP IDs from backup to ensure Sale integrity.
+            session.add(Product(**p))
+            
+        # Clients
+        for c in data.get("clients", []):
+            # Same for clients, keep IDs for sales linkage
+            session.add(Client(**c))
+            
+        # Users
+        for u in data.get("users", []):
+            session.add(User(**u))
+            
+        # Settings
+        for s in data.get("settings", []):
+            session.add(Settings(**s))
+            
+        session.flush() # Commit base tables
+        
+        # Sales
+        from datetime import datetime
+        for s in data.get("sales", []):
+            if 'timestamp' in s and isinstance(s['timestamp'], str):
+                s['timestamp'] = datetime.fromisoformat(s['timestamp'])
+            session.add(Sale(**s))
+            
+        session.flush()
+        
+        # Sale Items
+        for i in data.get("sale_items", []):
+            session.add(SaleItem(**i))
+
+        # Payments
+        for pay in data.get("payments", []):
+             if 'date' in pay and isinstance(pay['date'], str):
+                pay['date'] = datetime.fromisoformat(pay['date'])
+             session.add(Payment(**pay))
+             
+        session.commit()
+        return {"status": "success", "message": "System restored successfully"}
+        
+    except Exception as e:
+        session.rollback()
+        return {"error": f"Restore failed: {str(e)}"}

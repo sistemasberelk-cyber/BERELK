@@ -1,15 +1,24 @@
-# Backend Gitignore
+
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
+
+# Environment
 .env
 .venv
-env/
 venv/
 ENV/
+
+# Database
 *.db
 *.sqlite3
-.DS_Store
-static/backups/
-legacy_data/
+
+# Credentials (NEVER COMMIT)
+credentials.json
+service_account.json
+client_secret.json
+
+# IDEs
+.vscode/
+.idea/
