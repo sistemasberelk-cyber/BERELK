@@ -44,6 +44,25 @@
                 Predeterminada (Windows)</label>
             <input type="text" id="s-printer" name="printer_name" placeholder="Ej. EPSON TM-T20II" class="form-input">
 
+            <h4 style="margin-top: 24px; margin-bottom: 12px; border-top: 1px solid #eee; padding-top: 16px;">
+                Configuración de Etiquetas</h4>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Ancho (mm)</label>
+                    <input type="number" id="s-label-w" name="label_width_mm" required placeholder="60"
+                        class="form-input">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 8px; font-weight: 500;">Alto (mm)</label>
+                    <input type="number" id="s-label-h" name="label_height_mm" required placeholder="40"
+                        class="form-input">
+                </div>
+            </div>
+            <p style="font-size: 0.8em; color: #666; margin-top: 8px;">
+                Estándar: 60x40mm. Otros comunes: 50x25mm, 100x60mm.
+            </p>
+
             <button type="submit" class="btn" style="margin-top: 24px;">Guardar Cambios</button>
         </form>
     </div>
@@ -337,10 +356,25 @@
         }
     }
 
+    // --- Settings Load ---
+    document.addEventListener('DOMContentLoaded', () => {
+        // Preload settings into form
+        const settings = {{ settings.model_dump_json() | safe
+    }};
+    if (settings.company_name) document.getElementById('s-company').value = settings.company_name;
+    if (settings.printer_name) document.getElementById('s-printer').value = settings.printer_name;
+    if (settings.label_width_mm) document.getElementById('s-label-w').value = settings.label_width_mm;
+    if (settings.label_height_mm) document.getElementById('s-label-h').value = settings.label_height_mm;
+    });
+
     // --- Settings ---
     async function updateSettings(e) {
         e.preventDefault();
         const data = new FormData(e.target);
+
+        // Ensure numbers are sent as numbers if possible, though FormData is strings.
+        // Backend handles conversion.
+
         const res = await fetch('/api/settings', { method: 'POST', body: data });
         if (res.ok) alert("Configuración guardada");
         else alert("Error al guardar");

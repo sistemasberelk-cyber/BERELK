@@ -135,6 +135,83 @@ def print_labels_100x60(request: Request, user: User = Depends(require_auth), se
             
     return templates.TemplateResponse("labels_100x60.html", {"request": request, "labels": labels_data})
 
+@app.post("/print/labels/generate")
+def print_labels_v2(
+    request: Request,
+    selected_items: str = Form(...), # JSON string of IDs
+    layout_type: str = Form(...), # 'standard', 'exhibition', 'list'
+    settings: Settings = Depends(get_settings),
+    session: Session = Depends(get_session)
+):
+    import json
+    from sqlmodel import col
+    try:
+        item_ids = json.loads(selected_items)
+    except:
+        raise HTTPException(400, "Invalid JSON selection")
+        
+    products = session.exec(select(Product).where(col(Product.id).in_(item_ids))).all()
+    
+    # Prepare data for template
+    labels_data = []
+    
+    # Ensure barcodes exist as images
+    import os
+    from barcode import Code128
+    from barcode.writer import ImageWriter
+    
+    static_bc_path = "static/barcodes"
+    os.makedirs(static_bc_path, exist_ok=True)
+    
+    for p in products:
+        # Generate Barcode Image if not exists
+        bc_filename = f"{p.barcode}" # without extension for now, writer adds it
+        full_path = f"{static_bc_path}/{bc_filename}"
+        
+        # Check if file exists (Code128 writer adds .png)
+        if not os.path.exists(full_path + ".png"):
+            try:
+                # Generate
+                my_code = Code128(p.barcode, writer=ImageWriter())
+                my_code.save(full_path)
+            except Exception as e:
+                print(f"Error generating barcode for {p.name}: {e}")
+                
+        labels_data.append({
+            "name": p.name,
+            "price": p.price_retail if p.price_retail else p.price, # Use Retail price if set
+            "barcode": p.barcode,
+            "barcode_file": f"{p.barcode}.png",
+            "category": p.category,
+            "description": p.description,
+            "item_number": p.item_number
+        })
+        
+    if layout_type == "exhibition":
+        # 100x65mm (approx) - Exhibition cards
+        return templates.TemplateResponse("print_layout_exhibition.html", {"request": request, "labels": labels_data})
+    elif layout_type == "list":
+        # A4 List (using PDF generation would be better, but HTML list for now)
+        # Reuse 'products.html'? No, simple table
+        html_content = """
+        <html><body style='font-family:sans-serif;'>
+        <h2>Lista de Precios</h2>
+        <table border='1' cellspacing='0' cellpadding='5' style='width:100%'>
+        <tr><th>Art #</th><th>Producto</th><th>Precio</th></tr>
+        """
+        for l in labels_data:
+            html_content += f"<tr><td>{l['item_number'] or ''}</td><td>{l['name']}</td><td>${l['price']}</td></tr>"
+        html_content += "</table><script>window.print()</script></body></html>"
+        return HTMLResponse(html_content)
+    else:
+        # Standard configuration (Dynamic from Settings)
+        return templates.TemplateResponse("print_layout.html", {
+            "request": request, 
+            "labels": labels_data,
+            "w": settings.label_width_mm,
+            "h": settings.label_height_mm
+        })
+
 @app.get("/clients", response_class=HTMLResponse)
 def get_clients_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
     clients = session.exec(select(Client)).all()
@@ -717,7 +794,9 @@ def migrate_schema_v5(session: Session = Depends(get_session), user: User = Depe
         "ALTER TABLE client ADD COLUMN transport_name TEXT;",
         "ALTER TABLE client ADD COLUMN transport_address TEXT;",
         "ALTER TABLE sale ADD COLUMN amount_paid FLOAT DEFAULT 0;",
-        "ALTER TABLE sale ADD COLUMN payment_status TEXT DEFAULT 'paid';"
+        "ALTER TABLE sale ADD COLUMN payment_status TEXT DEFAULT 'paid';",
+        "ALTER TABLE settings ADD COLUMN label_width_mm INTEGER DEFAULT 60;",
+        "ALTER TABLE settings ADD COLUMN label_height_mm INTEGER DEFAULT 40;"
     ]
     
     results = []
@@ -1325,13 +1404,27 @@ def update_settings_api(
     if user.role != "admin": raise HTTPException(403)
     # 'session' here is the Settings object from dependency, not DB session
     # Wait, get_settings returns Settings OBJECT.
-    # We need to load it into DB session to update.
-    current_settings = session
-    current_settings.company_name = company_name
-    current_settings.printer_name = printer_name
-    db.add(current_settings)
-    db.commit()
-    return current_settings
+# --- Settings API ---
+@app.post("/api/settings")
+def update_settings(
+    company_name: str = Form(...),
+    printer_name: Optional[str] = Form(None),
+    label_width_mm: int = Form(60),
+    label_height_mm: int = Form(40),
+    settings: Settings = Depends(get_settings),
+    session: Session = Depends(get_session),
+    user: User = Depends(require_auth)
+):
+    if user.role != "admin": raise HTTPException(403)
+    
+    settings.company_name = company_name
+    settings.printer_name = printer_name
+    settings.label_width_mm = label_width_mm
+    settings.label_height_mm = label_height_mm
+    
+    session.add(settings)
+    session.commit()
+    return {"status": "success"}
 
 @app.get("/api/admin/reset-inventory-from-excel")
 def reset_inventory_from_excel(session: Session = Depends(get_session), user: User = Depends(require_auth)):

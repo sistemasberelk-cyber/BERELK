@@ -7,8 +7,10 @@ class Settings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     company_name: str = Field(default="Berel K")
     logo_url: str = Field(default="/static/images/berelk_logo.png")
-    currency_symbol: str = Field(default="$")
-    printer_name: Optional[str] = Field(default=None) # Printer name for backend printing
+    tax_rate: Optional[float] = Field(default=0.0)
+    printer_name: Optional[str] = Field(default=None)
+    label_width_mm: int = Field(default=60)
+    label_height_mm: int = Field(default=40) # Printer name for backend printing
 
 # --- Tax Model ---
 class Tax(SQLModel, table=True):
