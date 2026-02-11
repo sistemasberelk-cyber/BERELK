@@ -22,6 +22,14 @@
         </div>
     </div>
 
+    <!-- Search Bar -->
+    <div style="margin-bottom: 20px;">
+        <input type="text" id="product-filter"
+            placeholder="🔍 Buscar por nombre, código de barras, item #, categoría..."
+            style="width: 100%; padding: 12px 16px; font-size: 1rem; border: 2px solid #e5e7eb; border-radius: 8px; background: white;"
+            onkeyup="filterProducts()">
+    </div>
+
     <div class="table-container">
         <table>
             <thead>
@@ -562,6 +570,24 @@
 
         document.getElementById('print-selected-items').value = JSON.stringify(selectedIds);
         document.getElementById('print-modal').style.display = 'flex';
+    }
+
+    function filterProducts() {
+        const input = document.getElementById('product-filter');
+        const filter = input.value.toLowerCase();
+        const table = document.querySelector('.table-container table tbody');
+        const rows = table.getElementsByTagName('tr');
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const text = row.textContent || row.innerText;
+
+            if (text.toLowerCase().indexOf(filter) > -1) {
+                row.style.display = '';
+            } else {
+                row.style.display = 'none';
+            }
+        }
     }
 </script>
 

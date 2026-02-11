@@ -104,15 +104,23 @@ function renderProducts(products) {
         const displayPrice = hasBulk ? p.price_bulk : p.price;
 
         return `
-        <div onclick='addToCart(${JSON.stringify(p)})'
-             style="cursor: pointer; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; text-align: center; background: rgba(255,255,255,0.4);">
-            <div style="font-weight: 600;">${p.name}</div>
-            ${p.item_number ? `<div style="font-size: 0.8rem; color: #555; background: #eee; display: inline-block; padding: 2px 6px; border-radius: 4px; margin: 4px 0;">#${p.item_number}</div>` : ''}
-            <div style="color: var(--primary-color); font-weight: 700;">
-                $${displayPrice}
-                ${hasBulk ? '<span style="font-size: 0.7rem; color: #b45309; display: block;">(Precio Bulto)</span>' : ''}
+        <div style="cursor: pointer; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; text-align: center; background: rgba(255,255,255,0.4); position: relative;">
+            <!-- Edit Button (Top Right) -->
+            <button onclick="event.stopPropagation(); quickEditProduct(${p.id})" 
+                style="position: absolute; top: 4px; right: 4px; background: #2563eb; color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 0.75rem; z-index: 10;">
+                ✏️
+            </button>
+            
+            <!-- Product Card (Clickable to Add) -->
+            <div onclick='addToCart(${JSON.stringify(p)})'>
+                <div style="font-weight: 600;">${p.name}</div>
+                ${p.item_number ? `<div style="font-size: 0.8rem; color: #555; background: #eee; display: inline-block; padding: 2px 6px; border-radius: 4px; margin: 4px 0;">#${p.item_number}</div>` : ''}
+                <div style="color: var(--primary-color); font-weight: 700;">
+                    $${displayPrice}
+                    ${hasBulk ? '<span style="font-size: 0.7rem; color: #b45309; display: block;">(Precio Bulto)</span>' : ''}
+                </div>
+                <div style="font-size: 0.8rem; color: #666;">Stock: ${p.stock_quantity}</div>
             </div>
-            <div style="font-size: 0.8rem; color: #666;">Stock: ${p.stock_quantity}</div>
         </div>
         `;
     }).join('');
@@ -360,3 +368,85 @@ function handlePaymentMethodChange() {
         amountInput.value = total.toFixed(2); // Default to full payment
     }
 }
+
+async function quickEditProduct(productId) {
+    // Find product in allProducts
+    const product = allProducts.find(p => p.id === productId);
+    if (!product) {
+        Swal.fire('Error', 'Producto no encontrado', 'error');
+        return;
+    }
+
+    const { value: formValues } = await Swal.fire({
+        title: `Editar: ${product.name}`,
+        html: `
+            <div style="text-align: left;">
+                <label style="font-weight: bold;">Precio Unitario:</label>
+                <input id="edit-price" type="number" step="0.01" value="${product.price || 0}" class="swal2-input" style="width: 90%;">
+                
+                <label style="font-weight: bold; margin-top: 10px; display: block;">Precio Mostrador:</label>
+                <input id="edit-price-retail" type="number" step="0.01" value="${product.price_retail || ''}" class="swal2-input" style="width: 90%;">
+                
+                <label style="font-weight: bold; margin-top: 10px; display: block;">Precio Bulto:</label>
+                <input id="edit-price-bulk" type="number" step="0.01" value="${product.price_bulk || ''}" class="swal2-input" style="width: 90%;">
+                
+                <label style="font-weight: bold; margin-top: 10px; display: block;">Stock:</label>
+                <input id="edit-stock" type="number" value="${product.stock_quantity || 0}" class="swal2-input" style="width: 90%;">
+            </div>
+        `,
+        focusConfirm: false,
+        showCancelButton: true,
+        confirmButtonText: 'Guardar',
+        cancelButtonText: 'Cancelar',
+        preConfirm: () => {
+            return {
+                price: parseFloat(document.getElementById('edit-price').value),
+                price_retail: parseFloat(document.getElementById('edit-price-retail').value) || null,
+                price_bulk: parseFloat(document.getElementById('edit-price-bulk').value) || null,
+                stock: parseInt(document.getElementById('edit-stock').value)
+            }
+        }
+    });
+
+    if (formValues) {
+        try {
+            const formData = new FormData();
+            formData.append('name', product.name);
+            formData.append('price', formValues.price);
+            formData.append('stock', formValues.stock);
+            formData.append('description', product.description || '');
+            formData.append('barcode', product.barcode || '');
+            formData.append('category', product.category || '');
+            formData.append('item_number', product.item_number || '');
+            formData.append('cant_bulto', product.cant_bulto || '');
+            formData.append('numeracion', product.numeracion || '');
+            if (formValues.price_retail) formData.append('price_retail', formValues.price_retail);
+            if (formValues.price_bulk) formData.append('price_bulk', formValues.price_bulk);
+
+            const res = await fetch(`/api/products/${productId}`, {
+                method: 'PUT',
+                body: formData
+            });
+
+            if (res.ok) {
+                Swal.fire('Éxito', 'Producto actualizado', 'success');
+                // Reload products
+                const pRes = await fetch('/api/products');
+                allProducts = await pRes.json();
+                // Re-render current search
+                const term = document.getElementById('product-search').value.toLowerCase();
+                const filtered = allProducts.filter(p =>
+                    p.name.toLowerCase().includes(term) ||
+                    (p.barcode && p.barcode.includes(term)) ||
+                    (p.item_number && p.item_number.toLowerCase().includes(term))
+                );
+                renderProducts(filtered);
+            } else {
+                Swal.fire('Error', 'No se pudo actualizar', 'error');
+            }
+        } catch (e) {
+            Swal.fire('Error', 'Fallo de conexión', 'error');
+        }
+    }
+}
+
