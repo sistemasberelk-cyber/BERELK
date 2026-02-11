@@ -33,12 +33,6 @@
                 📷 Escanear
             </button>
 
-            <!-- Bulk Price Toggle -->
-            <label
-                style="display: flex; align-items: center; gap: 6px; font-weight: bold; color: #b45309; background: #fffbeb; padding: 8px 12px; border-radius: 8px; border: 1px solid #fcd34d; cursor: pointer; user-select: none;">
-                <input type="checkbox" id="use-bulk-price" style="width: 18px; height: 18px; cursor: pointer;">
-                Precio Bulto
-            </label>
         </div>
 
         <div id="product-results"
@@ -306,49 +300,10 @@
             }
 
             if (found) {
-                // STOP SCANNER IMMEDIATELLY
+                // STOP SCANNER
                 closeScanner();
-
-                // Prompt for Quantity
-                Swal.fire({
-                    title: found.name,
-                    text: 'Ingrese la cantidad a vender:',
-                    input: 'number',
-                    inputValue: document.getElementById('pos-qty').value || 1,
-                    showCancelButton: true,
-                    confirmButtonText: 'Agregar',
-                    cancelButtonText: 'Cancelar',
-                    inputAttributes: {
-                        min: 1,
-                        step: 1
-                    },
-                    didOpen: () => {
-                        const input = Swal.getInput();
-                        input.select();
-                    }
-                }).then((result) => {
-                    if (result.isConfirmed) {
-                        const qty = parseInt(result.value) || 1;
-                        if (qty > 0) {
-                            // Update input so addToCart picks it up
-                            document.getElementById('pos-qty').value = qty;
-                            addToCart(found);
-                            // Visual feedback (Toast)
-                            const Toast = Swal.mixin({
-                                toast: true,
-                                position: 'top-end',
-                                showConfirmButton: false,
-                                timer: 1500,
-                                timerProgressBar: true
-                            });
-                            Toast.fire({
-                                icon: 'success',
-                                title: `${qty}x ${found.name} agregado`
-                            });
-                        }
-                    }
-                });
-
+                // Call the new interactive addToCart from pos.js
+                addToCart(found);
             } else {
                 // Keep scanner open if not found? Or close to tell user?
                 // Usually better to keep scanning if miss-read, but if it read WRONG code, maybe alert.

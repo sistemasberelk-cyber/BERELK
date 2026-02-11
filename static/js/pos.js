@@ -99,46 +99,110 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function renderProducts(products) {
     const container = document.getElementById('product-results');
-    container.innerHTML = products.map(p => `
-        <div onclick="addToCart({id: ${p.id}, name: '${p.name}', price: ${p.price}})"
+    container.innerHTML = products.map(p => {
+        const hasBulk = p.price_bulk && p.price_bulk > 0;
+        const displayPrice = hasBulk ? p.price_bulk : p.price;
+
+        return `
+        <div onclick='addToCart(${JSON.stringify(p)})'
              style="cursor: pointer; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; text-align: center; background: rgba(255,255,255,0.4);">
             <div style="font-weight: 600;">${p.name}</div>
             ${p.item_number ? `<div style="font-size: 0.8rem; color: #555; background: #eee; display: inline-block; padding: 2px 6px; border-radius: 4px; margin: 4px 0;">#${p.item_number}</div>` : ''}
-            <div style="color: var(--primary-color); font-weight: 700;">$${p.price}</div>
+            <div style="color: var(--primary-color); font-weight: 700;">
+                $${displayPrice}
+                ${hasBulk ? '<span style="font-size: 0.7rem; color: #b45309; display: block;">(Precio Bulto)</span>' : ''}
+            </div>
             <div style="font-size: 0.8rem; color: #666;">Stock: ${p.stock_quantity}</div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
-function addToCart(product) {
-    const qtyInput = document.getElementById('pos-qty');
-    const qty = parseInt(qtyInput.value) || 1;
+async function addToCart(product) {
+    // 1. Prepare Price Options
+    const prices = [
+        { key: 'unit', label: 'Por Unidad', val: product.price },
+        { key: 'retail', label: 'Por Mostrador', val: product.price_retail },
+        { key: 'bulk', label: 'Por Bulto', val: product.price_bulk }
+    ];
 
-    const useBulk = document.getElementById('use-bulk-price') && document.getElementById('use-bulk-price').checked;
+    // Build options for radio selector, filter out null/0 prices
+    const inputOptions = {};
+    let defaultKey = 'bulk'; // Default based on previous request
 
-    // Determine Price
-    let finalPrice = product.price;
-    if (useBulk && product.price_bulk && product.price_bulk > 0) {
-        finalPrice = product.price_bulk;
-    }
+    prices.forEach(p => {
+        if (p.val && p.val > 0) {
+            inputOptions[p.key] = `${p.label} ($${p.val})`;
+        } else if (p.key === 'unit') {
+            // Always allow unit even if 0 (though unlikely)
+            inputOptions[p.key] = `${p.label} ($${p.val || 0})`;
+        }
+    });
 
+    // If only one option, skip? No, user wants to be asked.
+    const { value: selectedKey } = await Swal.fire({
+        title: 'Seleccionar Tarifa',
+        text: product.name,
+        input: 'radio',
+        inputOptions: inputOptions,
+        inputValue: inputOptions[defaultKey] ? defaultKey : 'unit',
+        showCancelButton: true,
+        confirmButtonText: 'Seleccionar Qty',
+        confirmButtonColor: '#2563eb',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!selectedKey) return;
+
+    const finalPrice = prices.find(p => p.key === selectedKey).val;
+    const finalLabel = prices.find(p => p.key === selectedKey).label;
+
+    // 2. Ask for Quantity
+    const { value: qty } = await Swal.fire({
+        title: 'Cantidad',
+        html: `Producto: <b>${product.name}</b><br>Precio: <span style="color:green; font-weight:bold;">${finalLabel} ($${finalPrice})</span>`,
+        input: 'number',
+        inputValue: document.getElementById('pos-qty').value || 1,
+        inputAttributes: { min: 1, step: 1 },
+        showCancelButton: true,
+        confirmButtonText: 'Agregar al Carrito'
+    });
+
+    if (!qty || qty <= 0) return;
+
+    const quantity = parseInt(qty);
+
+    // 3. Add to Data Structure
     const existing = cart.find(item => item.product_id === product.id && item.unit_price === finalPrice);
     if (existing) {
-        existing.quantity += qty;
+        existing.quantity += quantity;
     } else {
         cart.push({
             product_id: product.id,
             product_name: product.name,
-            item_number: product.item_number, // Pass item number
+            item_number: product.item_number,
             unit_price: finalPrice,
-            quantity: qty
+            quantity: quantity,
+            price_type: finalLabel
         });
     }
 
-    // Reset Qty to 1 after add? Optional. Let's keep it for bulk scanning.
-    qtyInput.value = 1;
+    // Reset Qty to 1 and focus search
+    document.getElementById('pos-qty').value = 1;
+    document.getElementById('product-search').value = '';
+    document.getElementById('product-search').focus();
 
     updateCart();
+
+    // Small Toast Feedback
+    Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'Agregado',
+        showConfirmButton: false,
+        timer: 1000
+    });
 }
 
 function updateCart() {
@@ -152,7 +216,10 @@ function updateCart() {
         <tr>
             <td>
                 ${item.product_name}
-                ${item.item_number ? `<div style="font-size: 0.75rem; color: #666;">#${item.item_number}</div>` : ''}
+                <div style="font-size: 0.75rem; color: #666;">
+                    ${item.item_number ? `#${item.item_number} | ` : ''}
+                    <span style="color: #2563eb; font-weight: bold;">${item.price_type}</span>
+                </div>
             </td>
             <td>
                 <div style="display: flex; align-items: center; gap: 4px;">

@@ -48,24 +48,22 @@ class StockService:
             # --- Credit Limit Check ---
             # If sale is not fully paid (Current Account), check limit
             # Calculate what part is debt
-            pending_amount = (total_sale + (product.price * qty)) - (amount_paid or 0) 
-            # Note: total_sale is accumulating in this loop, so this check is tricky inside loop.
-            # Better to check at the end or pre-calculate. 
-            # Optimization: Let's do it after calculating total_sale completely.
-            
+            # Determine Price: Always prefer Bulk Price if available
+            unit_price = product.price_bulk if (product.price_bulk and product.price_bulk > 0) else product.price
+
             # Decrement Stock
             product.stock_quantity -= qty
             session.add(product)
-            
+
             # Create Sale Item
-            line_total = product.price * qty
+            line_total = unit_price * qty
             total_sale += line_total
             
             sale_item = SaleItem(
                 product_id=p_id,
                 product_name=product.name,
                 quantity=qty,
-                unit_price=product.price,
+                unit_price=unit_price,
                 total=line_total
             )
             sale.items.append(sale_item)
