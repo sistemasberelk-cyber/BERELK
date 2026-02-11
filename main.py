@@ -175,6 +175,7 @@ def print_labels_v2(
     request: Request,
     selected_items: str = Form(...), # JSON string of IDs
     layout_type: str = Form(...), # 'standard', 'exhibition', 'list'
+    hide_price: Optional[bool] = Form(None),
     settings: Settings = Depends(get_settings),
     session: Session = Depends(get_session)
 ):
@@ -224,7 +225,11 @@ def print_labels_v2(
         
     if layout_type == "exhibition":
         # 100x65mm (approx) - Exhibition cards
-        return templates.TemplateResponse("print_layout_exhibition.html", {"request": request, "labels": labels_data})
+        return templates.TemplateResponse("print_layout_exhibition.html", {
+            "request": request, 
+            "labels": labels_data,
+            "hide_price": hide_price
+        })
     elif layout_type == "list":
         # A4 List (using PDF generation would be better, but HTML list for now)
         # Reuse 'products.html'? No, simple table
@@ -235,7 +240,8 @@ def print_labels_v2(
         <tr><th>Art #</th><th>Producto</th><th>Precio</th></tr>
         """
         for l in labels_data:
-            html_content += f"<tr><td>{l['item_number'] or ''}</td><td>{l['name']}</td><td>${l['price']}</td></tr>"
+            price_str = f"${l['price']}" if not hide_price else "---"
+            html_content += f"<tr><td>{l['item_number'] or ''}</td><td>{l['name']}</td><td>{price_str}</td></tr>"
         html_content += "</table><script>window.print()</script></body></html>"
         return HTMLResponse(html_content)
     else:
@@ -244,7 +250,8 @@ def print_labels_v2(
             "request": request, 
             "labels": labels_data,
             "w": settings.label_width_mm,
-            "h": settings.label_height_mm
+            "h": settings.label_height_mm,
+            "hide_price": hide_price
         })
 
 @app.get("/clients", response_class=HTMLResponse)
@@ -614,6 +621,7 @@ async def print_labels(request: Request, session: Session = Depends(get_session)
     form = await request.form()
     selected_ids = form.getlist("selected_products")
     label_type = form.get("label_type", "exhibition")
+    hide_price = form.get("hide_price") == "true"
     
     labels_to_print = []
     
@@ -657,7 +665,7 @@ async def print_labels(request: Request, session: Session = Depends(get_session)
                 my_code = barcode.get('code128', product.barcode)
                 my_code.save(file_path)
                 img_filename = f"{safe_filename}.svg"
-
+ 
             for _ in range(qty):
                 labels_to_print.append({
                     "id": product.id,
@@ -677,7 +685,11 @@ async def print_labels(request: Request, session: Session = Depends(get_session)
     else:
          template_name = "print_layout_exhibition.html"
         
-    return templates.TemplateResponse(template_name, {"request": request, "labels": labels_to_print})
+    return templates.TemplateResponse(template_name, {
+        "request": request, 
+        "labels": labels_to_print,
+        "hide_price": hide_price
+    })
 
 # --- Clients ---
 @app.get("/api/clients")
