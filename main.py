@@ -353,9 +353,25 @@ def get_sales_page(request: Request, user: User = Depends(require_auth), setting
 @app.post("/sales/backup", response_class=HTMLResponse)
 def trigger_backup(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
     from services.backup_service import perform_backup
+    from datetime import datetime, date
     
     # Run backup
     result = perform_backup(session)
+    
+    # If backup successful, DELETE today's sales to reset the counter
+    if result["status"] == "success":
+        today = date.today()
+        today_sales = session.exec(
+            select(Sale).where(
+                func.date(Sale.timestamp) == today
+            )
+        ).all()
+        
+        for sale in today_sales:
+            # Delete associated sale items first (cascade should handle this, but being explicit)
+            session.delete(sale)
+        
+        session.commit()
     
     # Reload sales data to render the page (duplicated logic, could be refactored)
     sales = session.exec(select(Sale).order_by(Sale.timestamp.desc())).all()
@@ -378,7 +394,7 @@ def trigger_backup(request: Request, user: User = Depends(require_auth), setting
     daily_reports.sort(key=lambda x: x['date'], reverse=True)
     
     status_msg = "success" if result["status"] == "success" else "error"
-    msg_text = "✅ Backup exitoso en Google Drive!" if result["status"] == "success" else f"❌ Error en Backup: {result['message']}"
+    msg_text = "✅ Backup exitoso y caja cerrada!" if result["status"] == "success" else f"❌ Error en Backup: {result['message']}"
 
     return templates.TemplateResponse("sales.html", {
         "request": request, "active_page": "sales", "settings": settings, "user": user, 
