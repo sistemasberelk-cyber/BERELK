@@ -7,15 +7,21 @@
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
         <h2>Impresor de Etiquetas</h2>
         <div style="display: flex; gap: 10px; align-items: center;">
-            <div style="padding: 10px; background: #e0f2fe; color: #0369a1; border-radius: 8px; font-weight: bold;">
-                Formato: 100x65mm
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <label style="font-size: 0.9rem; font-weight: 500;">Formato:</label>
+                <select name="layout_type" form="printForm"
+                    style="padding: 8px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 0.9rem; min-width: 150px;">
+                    <option value="standard">Estándar ({{ settings.label_width_mm }}x{{ settings.label_height_mm }}mm)
+                    </option>
+                    <option value="55x44">Personalizado (55x44mm)</option>
+                    <option value="exhibition" selected>Exhibición (100x65mm)</option>
+                </select>
             </div>
             <label
                 style="display: flex; align-items: center; gap: 8px; cursor: pointer; background: white; padding: 8px 12px; border-radius: 8px; border: 1px solid #e5e7eb; font-size: 0.9rem;">
                 <input type="checkbox" name="hide_price" value="true" form="printForm">
                 <span>Ocultar Precio</span>
             </label>
-            <input type="hidden" name="label_type" value="exhibition" form="printForm">
             <button type="submit" form="printForm" class="btn">
                 🖨️ Generar Vista
             </button>

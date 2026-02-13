@@ -23,17 +23,17 @@ class AuthService:
             admin = User(username="admin", password_hash=hashed, role="admin", full_name="Administrador")
             session.add(admin)
             print("INFO: Created default user 'admin' with password 'admin123'")
-        else:
-            # Ensure admin has access (Auto-fix for dev)
-            try:
-                if not AuthService.verify_password("admin123", user.password_hash):
-                    print("WARN: Admin password mismatch. Resetting to 'admin123'...")
-                    user.password_hash = AuthService.get_password_hash("admin123")
-                    session.add(user)
-            except Exception as e:
-                print(f"WARN: Error verifying admin password ({e}). Resetting...")
-                user.password_hash = AuthService.get_password_hash("admin123")
-                session.add(user)
+        # else:
+        #     # Ensure admin has access (Auto-fix for dev)
+        #     try:
+        #         if not AuthService.verify_password("admin123", user.password_hash):
+        #             print("WARN: Admin password mismatch. Resetting to 'admin123'...")
+        #             user.password_hash = AuthService.get_password_hash("admin123")
+        #             session.add(user)
+        #     except Exception as e:
+        #         print(f"WARN: Error verifying admin password ({e}). Resetting...")
+        #         user.password_hash = AuthService.get_password_hash("admin123")
+        #         session.add(user)
         
         # 2. Create Default Settings
         settings = session.exec(select(Settings)).first()

@@ -68,6 +68,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="NexPos System", lifespan=lifespan)
 
+@app.get("/health")
+@app.head("/health")
+def health_check():
+    return {"status": "ok"}
+
+
 # Mount Static Files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -94,6 +100,7 @@ from starlette.middleware.sessions import SessionMiddleware
 app.add_middleware(SessionMiddleware, secret_key="super-secret-nexpos-key")
 
 @app.get("/login", response_class=HTMLResponse)
+@app.head("/login")
 def login_page(request: Request, settings: Settings = Depends(get_settings)):
     return templates.TemplateResponse("login.html", {"request": request, "settings": settings})
 
@@ -113,6 +120,7 @@ def logout(request: Request):
 # --- App Routes (Protected) ---
 
 @app.get("/", response_class=HTMLResponse)
+@app.head("/")
 def get_dashboard(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
     total_products = session.exec(select(func.count(Product.id))).one()
     low_stock = session.exec(select(func.count(Product.id)).where(Product.stock_quantity < Product.min_stock_level)).one()
@@ -139,6 +147,7 @@ def get_pos(request: Request, user: User = Depends(require_auth), settings: Sett
     return templates.TemplateResponse("pos.html", {"request": request, "active_page": "pos", "settings": settings, "user": user})
 
 @app.get("/products", response_class=HTMLResponse)
+@app.head("/products")
 def get_products_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
     products = session.exec(select(Product)).all()
     return templates.TemplateResponse("products.html", {"request": request, "active_page": "products", "settings": settings, "user": user, "products": products})
@@ -170,89 +179,6 @@ def print_labels_100x60(request: Request, user: User = Depends(require_auth), se
             
     return templates.TemplateResponse("labels_100x60.html", {"request": request, "labels": labels_data})
 
-@app.post("/print/labels/generate")
-def print_labels_v2(
-    request: Request,
-    selected_items: str = Form(...), # JSON string of IDs
-    layout_type: str = Form(...), # 'standard', 'exhibition', 'list'
-    hide_price: Optional[bool] = Form(None),
-    settings: Settings = Depends(get_settings),
-    session: Session = Depends(get_session)
-):
-    import json
-    from sqlmodel import col
-    try:
-        item_ids = json.loads(selected_items)
-    except:
-        raise HTTPException(400, "Invalid JSON selection")
-        
-    products = session.exec(select(Product).where(col(Product.id).in_(item_ids))).all()
-    
-    # Prepare data for template
-    labels_data = []
-    
-    # Ensure barcodes exist as images
-    import os
-    from barcode import Code128
-    from barcode.writer import ImageWriter
-    
-    static_bc_path = "static/barcodes"
-    os.makedirs(static_bc_path, exist_ok=True)
-    
-    for p in products:
-        # Generate Barcode Image if not exists
-        bc_filename = f"{p.barcode}" # without extension for now, writer adds it
-        full_path = f"{static_bc_path}/{bc_filename}"
-        
-        # Check if file exists (Code128 writer adds .png)
-        if not os.path.exists(full_path + ".png"):
-            try:
-                # Generate
-                my_code = Code128(p.barcode, writer=ImageWriter())
-                my_code.save(full_path)
-            except Exception as e:
-                print(f"Error generating barcode for {p.name}: {e}")
-                
-        labels_data.append({
-            "name": p.name,
-            "price": p.price_retail if p.price_retail else p.price, # Use Retail price if set
-            "barcode": p.barcode,
-            "barcode_file": f"{p.barcode}.png",
-            "category": p.category,
-            "description": p.description,
-            "item_number": p.item_number
-        })
-        
-    if layout_type == "exhibition":
-        # 100x65mm (approx) - Exhibition cards
-        return templates.TemplateResponse("print_layout_exhibition.html", {
-            "request": request, 
-            "labels": labels_data,
-            "hide_price": hide_price
-        })
-    elif layout_type == "list":
-        # A4 List (using PDF generation would be better, but HTML list for now)
-        # Reuse 'products.html'? No, simple table
-        html_content = """
-        <html><body style='font-family:sans-serif;'>
-        <h2>Lista de Precios</h2>
-        <table border='1' cellspacing='0' cellpadding='5' style='width:100%'>
-        <tr><th>Art #</th><th>Producto</th><th>Precio</th></tr>
-        """
-        for l in labels_data:
-            price_str = f"${l['price']}" if not hide_price else "---"
-            html_content += f"<tr><td>{l['item_number'] or ''}</td><td>{l['name']}</td><td>{price_str}</td></tr>"
-        html_content += "</table><script>window.print()</script></body></html>"
-        return HTMLResponse(html_content)
-    else:
-        # Standard configuration (Dynamic from Settings)
-        return templates.TemplateResponse("print_layout.html", {
-            "request": request, 
-            "labels": labels_data,
-            "w": settings.label_width_mm,
-            "h": settings.label_height_mm,
-            "hide_price": hide_price
-        })
 
 @app.get("/clients", response_class=HTMLResponse)
 def get_clients_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), session: Session = Depends(get_session)):
@@ -617,10 +543,14 @@ def get_labels_page(request: Request, user: User = Depends(require_auth), settin
     return templates.TemplateResponse("print_labels_selection.html", {"request": request, "active_page": "products", "settings": settings, "user": user, "products": products})
 
 @app.post("/products/labels/print", response_class=HTMLResponse)
-async def print_labels(request: Request, session: Session = Depends(get_session)):
+async def print_labels(
+    request: Request, 
+    session: Session = Depends(get_session),
+    settings: Settings = Depends(get_settings)
+):
     form = await request.form()
     selected_ids = form.getlist("selected_products")
-    label_type = form.get("label_type", "exhibition")
+    label_type = form.get("layout_type", "exhibition") # Changed from label_type to match form
     hide_price = form.get("hide_price") == "true"
     
     labels_to_print = []
@@ -680,16 +610,29 @@ async def print_labels(request: Request, session: Session = Depends(get_session)
                     "description": product.description
                 })
     
-    if label_type == "standard":
-         template_name = "print_layout.html"
+    if label_type == "exhibition":
+        return templates.TemplateResponse("print_layout_exhibition.html", {
+            "request": request, 
+            "labels": labels_to_print,
+            "hide_price": hide_price
+        })
+    elif label_type == "55x44":
+        return templates.TemplateResponse("print_layout.html", {
+            "request": request, 
+            "labels": labels_to_print,
+            "w": 55,
+            "h": 44,
+            "hide_price": hide_price
+        })
     else:
-         template_name = "print_layout_exhibition.html"
-        
-    return templates.TemplateResponse(template_name, {
-        "request": request, 
-        "labels": labels_to_print,
-        "hide_price": hide_price
-    })
+        # Standard configuration (Dynamic from Settings)
+        return templates.TemplateResponse("print_layout.html", {
+            "request": request, 
+            "labels": labels_to_print,
+            "w": settings.label_width_mm,
+            "h": settings.label_height_mm,
+            "hide_price": hide_price
+        })
 
 # --- Clients ---
 @app.get("/api/clients")
@@ -1530,6 +1473,15 @@ def print_labels_v2(
             html_content += f"<tr><td>{l['item_number'] or ''}</td><td>{l['name']}</td><td>{price_display}</td></tr>"
         html_content += "</table><script>window.print()</script></body></html>"
         return HTMLResponse(html_content)
+    elif layout_type == "55x44":
+        # Specific custom size
+        return templates.TemplateResponse("print_layout.html", {
+            "request": request, 
+            "labels": labels_data,
+            "w": 55,
+            "h": 44,
+            "hide_price": should_hide_price
+        })
     else:
         # Standard configuration (Dynamic from Settings)
         return templates.TemplateResponse("print_layout.html", {
