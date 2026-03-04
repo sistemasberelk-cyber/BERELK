@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
         "ALTER TABLE sale ADD COLUMN payment_status TEXT DEFAULT 'paid';"
     ]
     
-    print("🚀 [DEPLOY v2.5.1] Checking/Running Schema Migrations...")
+    print("🚀 [DEPLOY v2.5.2] Checking/Running Schema Migrations...")
     for stmt in migration_statements:
         try:
             session.exec(text(stmt))
@@ -120,15 +120,8 @@ def get_tenant(request: Request, user: User = Depends(get_current_user)) -> int:
         raise HTTPException(status_code=403, detail="No tenant associated")
     return user.tenant_id
 
-def get_settings(tenant_id: int = Depends(get_tenant), session: Session = Depends(get_session)) -> Settings:
-    settings = session.exec(select(Settings).where(Settings.tenant_id == tenant_id)).first()
-    if not settings:
-        # Create default if missing
-        settings = Settings(tenant_id=tenant_id, company_name="New Shop")
-        session.add(settings)
-        session.commit()
-        session.refresh(settings)
-    return settings
+def get_settings(session: Session = Depends(get_session)) -> Settings:
+    return SettingsService.get_or_create_settings(session)
 
 # --- Auth Routes ---
 
