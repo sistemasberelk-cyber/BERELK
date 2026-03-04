@@ -168,13 +168,20 @@
     <!-- BACKUP -->
     <div id="content-backup" class="tab-content" style="display: none;">
         <h3 style="margin-bottom: 16px;">Respaldo de Base de Datos</h3>
-        <p style="color: #64748b; margin-bottom: 24px;">Descare una copia completa de su base de datos en formato JSON
-            para seguridad o migración.</p>
+        <p style="color: #64748b; margin-bottom: 24px;">Genere snapshots comprimidos de la base y descárguelos para
+            recuperación ante fallas (compatible con despliegues en Supabase).</p>
 
-        <a href="/api/backup" target="_blank" class="btn"
-            style="background-color: #0f172a; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
-            💾 Descargar Backup Completo
-        </a>
+        <div style="display:flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;">
+            <button onclick="createDbBackup()" class="btn" style="background-color:#0f172a;">💾 Generar backup
+                (.json.gz)</button>
+            <a href="/api/backup" target="_blank" class="btn" style="text-decoration:none; background:#334155;">Descarga
+                rápida JSON</a>
+        </div>
+
+        <div id="backup-list"
+            style="font-size: 0.9rem; color:#334155; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px;">
+            Cargando backups...
+        </div>
     </div>
 
 </div>
@@ -244,6 +251,7 @@
 
         if (tab === 'users') loadUsers();
         if (tab === 'taxes') loadTaxes();
+        if (tab === 'backup') loadBackupFiles();
     }
 
     // --- Users ---
@@ -369,6 +377,7 @@
     if (settings.printer_name) document.getElementById('s-printer').value = settings.printer_name;
     if (settings.label_width_mm) document.getElementById('s-label-w').value = settings.label_width_mm;
     if (settings.label_height_mm) document.getElementById('s-label-h').value = settings.label_height_mm;
+    loadBackupFiles();
     });
 
     // --- Settings ---
@@ -396,6 +405,45 @@
         const data = await res.json();
         if (res.ok) alert(data.message);
         else alert("Error");
+    }
+
+
+    async function loadBackupFiles() {
+        const box = document.getElementById('backup-list');
+        if (!box) return;
+
+        const res = await fetch('/api/admin/backups/list');
+        if (!res.ok) {
+            box.innerHTML = 'No se pudo obtener la lista de backups.';
+            return;
+        }
+
+        const payload = await res.json();
+        const backups = payload.backups || [];
+        if (!backups.length) {
+            box.innerHTML = 'Aún no hay backups generados en este servidor.';
+            return;
+        }
+
+        box.innerHTML = backups.map(b => {
+            const sizeKb = (b.size_bytes / 1024).toFixed(1);
+            return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #e2e8f0;">
+                <div><strong>${b.filename}</strong><br><small>${b.modified_at} · ${sizeKb} KB</small></div>
+                <a href="/api/admin/backups/download/${encodeURIComponent(b.filename)}" class="btn" style="text-decoration:none; padding:6px 10px;">Descargar</a>
+            </div>`;
+        }).join('');
+    }
+
+    async function createDbBackup() {
+        const res = await fetch('/api/admin/backups/create', { method: 'POST' });
+        const payload = await res.json();
+        if (!res.ok || payload.status !== 'success') {
+            alert(payload.error || payload.detail || 'Error al generar backup');
+            return;
+        }
+
+        alert(`Backup generado: ${payload.filename}`);
+        loadBackupFiles();
     }
 </script>
 

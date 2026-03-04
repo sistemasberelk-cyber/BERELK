@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, status, Response, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select, func
@@ -15,6 +15,7 @@ from database.seed_data import seed_products
 from services.stock_service import StockService
 from services.auth_service import AuthService
 from services.settings_service import SettingsService
+from services.database_backup_service import create_backup_file, list_local_backups, get_local_backup_path
 import barcode
 from barcode.writer import ImageWriter
 
@@ -1807,6 +1808,25 @@ def create_system_backup(session: Session = Depends(get_session), user: User = D
         
     except Exception as e:
         return {"error": f"Backup failed: {str(e)}"}
+
+@app.post("/api/admin/backups/create")
+def create_database_backup_file(session: Session = Depends(get_session), user: User = Depends(require_auth)):
+    if user.role != "admin": raise HTTPException(403)
+    return create_backup_file(session)
+
+
+@app.get("/api/admin/backups/list")
+def list_database_backup_files(user: User = Depends(require_auth)):
+    if user.role != "admin": raise HTTPException(403)
+    return {"backups": list_local_backups()}
+
+
+@app.get("/api/admin/backups/download/{filename}")
+def download_database_backup_file(filename: str, user: User = Depends(require_auth)):
+    if user.role != "admin": raise HTTPException(403)
+    path = get_local_backup_path(filename)
+    return FileResponse(path=path, media_type="application/gzip", filename=path.name)
+
 
 @app.post("/api/admin/restore")
 async def restore_system_backup(file: UploadFile = File(...), session: Session = Depends(get_session), user: User = Depends(require_auth)):
