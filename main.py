@@ -1,16 +1,25 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, status, Response, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlmodel import Session, select, func
+from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import Session, select, func, text, delete
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from typing import Optional, List
+from datetime import datetime, date, timezone
+from io import BytesIO
 import os
+import io
 import shutil
+import uuid
+import json
+import gzip
+
+import pandas as pd
 
 from database.session import create_db_and_tables, get_session
-from database.models import Product, Sale, User, Settings, Client, Payment, Tax
+from database.models import Product, Sale, User, Settings, Client, Payment, Tax, SaleItem
 from database.seed_data import seed_products
 from services.stock_service import StockService
 from services.auth_service import AuthService
@@ -88,6 +97,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="NexPos System", lifespan=lifespan)
 
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.get("/health")
 @app.head("/health")
 def health_check():
@@ -157,7 +175,7 @@ def get_dashboard(request: Request, user: User = Depends(require_auth), settings
     recent_sales = session.exec(select(Sale).where(Sale.tenant_id == tenant_id).order_by(Sale.timestamp.desc()).limit(5)).all()
     
     # Calculate Today's Sales
-    from datetime import datetime, date
+
     today_start = datetime.combine(date.today(), datetime.min.time())
     
     # Sum total_amount for sales >= today_start
@@ -326,7 +344,7 @@ def get_sales_page(request: Request, user: User = Depends(require_auth), setting
 @app.post("/sales/backup", response_class=HTMLResponse)
 def trigger_backup(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), tenant_id: int = Depends(get_tenant), session: Session = Depends(get_session)):
     from services.backup_service import perform_backup
-    from datetime import datetime, date
+
     
     # Run backup
     result = perform_backup(session)
@@ -385,9 +403,8 @@ def trigger_backup(request: Request, user: User = Depends(require_auth), setting
 # --- Products ---
 @app.get("/api/products/export")
 def export_products_api(session: Session = Depends(get_session), user: User = Depends(require_auth), tenant_id: int = Depends(get_tenant)):
-    import pandas as pd
-    from io import BytesIO
-    from fastapi.responses import StreamingResponse
+
+
     
     products = session.exec(select(Product).where(Product.tenant_id == tenant_id)).all()
     
@@ -422,9 +439,8 @@ def export_products_api(session: Session = Depends(get_session), user: User = De
 
 @app.get("/api/clients/export")
 def export_clients_api(session: Session = Depends(get_session), user: User = Depends(require_auth), tenant_id: int = Depends(get_tenant)):
-    import pandas as pd
-    from io import BytesIO
-    from fastapi.responses import StreamingResponse
+
+
     
     clients = session.exec(select(Client).where(Client.tenant_id == tenant_id)).all()
     
@@ -487,7 +503,7 @@ def create_product_api(
     )
     
     if image and image.filename:
-        import uuid
+
         # Generate unique filename to avoid collisions
         ext = image.filename.split(".")[-1]
         filename = f"{uuid.uuid4()}.{ext}"
@@ -544,7 +560,7 @@ def update_product_api(
         product.barcode = barcode
     
     if image and image.filename:
-        import uuid
+
         ext = image.filename.split(".")[-1]
         filename = f"{uuid.uuid4()}.{ext}"
         file_location = f"static/product_images/{filename}"
@@ -864,7 +880,7 @@ def migrate_schema_v5(session: Session = Depends(get_session), user: User = Depe
         existing = session.exec(select(Product).where(Product.item_number == p_data['item_number'])).first()
         if not existing:
             # We need a barcode. Use item_number if valid.
-            import uuid
+    
             barcode_val = p_data['item_number'] if len(p_data['item_number']) >= 4 else str(uuid.uuid4())[:12]
             
             # Assume default tenant 1 for migration
@@ -895,9 +911,8 @@ def admin_redirect():
 @app.get("/api/templates/download/{type}")
 def download_import_template(type: str, user: User = Depends(require_auth)):
     if user.role != "admin": raise HTTPException(403)
-    import pandas as pd
-    from io import BytesIO
-    from fastapi.responses import StreamingResponse
+
+
     
     if type == "products":
         # Create DataFrame with headers and a sample row
@@ -951,7 +966,7 @@ def download_import_template(type: str, user: User = Depends(require_auth)):
 async def import_products(file: UploadFile = File(...), session: Session = Depends(get_session), user: User = Depends(require_auth), tenant_id: int = Depends(get_tenant)):
     if user.role != "admin": raise HTTPException(403)
     
-    import pandas as pd
+
     import io
     
     contents = await file.read()
@@ -1034,7 +1049,7 @@ async def import_products(file: UploadFile = File(...), session: Session = Depen
                 if not barcode:
                     should_generate = True
                     # Temp placeholder to satisfy NOT NULL constraint during flush
-                    import uuid
+            
                     barcode = f"TMP-{uuid.uuid4().hex[:8]}"
 
                 prod = Product(
@@ -1070,7 +1085,7 @@ async def import_products(file: UploadFile = File(...), session: Session = Depen
 async def import_clients(file: UploadFile = File(...), session: Session = Depends(get_session), user: User = Depends(require_auth)):
     if user.role != "admin": raise HTTPException(403)
     
-    import pandas as pd
+
     import io
     
     contents = await file.read()
@@ -1546,7 +1561,7 @@ async def update_settings(
 def reset_inventory_from_excel(session: Session = Depends(get_session), user: User = Depends(require_auth), tenant_id: int = Depends(get_tenant)):
     if user.role != "admin": raise HTTPException(403)
     
-    import pandas as pd
+
     import os
     import io
     from sqlmodel import text, delete
@@ -1598,7 +1613,7 @@ def reset_inventory_from_excel(session: Session = Depends(get_session), user: Us
                 should_generate = False
                 if not barcode:
                     should_generate = True
-                    import uuid
+            
                     barcode = f"TMP-{uuid.uuid4().hex[:8]}"
 
                 category = get_str('Category')
@@ -1658,7 +1673,7 @@ def reset_inventory_from_excel(session: Session = Depends(get_session), user: Us
 def reset_clients_from_excel(session: Session = Depends(get_session), user: User = Depends(require_auth)):
     if user.role != "admin": raise HTTPException(403)
     
-    import pandas as pd
+
     import os
     from sqlmodel import text
     from database.models import Client, Sale
@@ -1831,11 +1846,12 @@ def download_database_backup_file(filename: str, user: User = Depends(require_au
 @app.post("/api/admin/restore")
 async def restore_system_backup(file: UploadFile = File(...), session: Session = Depends(get_session), user: User = Depends(require_auth)):
     if user.role != "admin": raise HTTPException(403)
-    
-    import gzip
-    import json
-    from sqlmodel import text
-    
+
+    # Helper: only keep fields that exist on the model to prevent injection
+    def _safe_fields(model_class, row: dict) -> dict:
+        valid_cols = {c.name for c in model_class.__table__.columns}
+        return {k: v for k, v in row.items() if k in valid_cols}
+
     try:
         raw_content = await file.read()
         # Support both .json.gz and plain .json backups
@@ -1844,82 +1860,59 @@ async def restore_system_backup(file: UploadFile = File(...), session: Session =
         else:
             content = raw_content
         data = json.loads(content)
-        
+
         # VALIDATION
-        if "products" not in data or "clients" not in data:
-            return {"error": "Invalid backup format"}
-            
-        # 1. WIPE CURRENT STATE (Transactions first)
-        # We need to delete in correct order to avoid FK constraints if enforced
-        # SaleItem -> Sale
-        # Payment -> Client
-        # Product, User, Client
-        
-        # SQLModel doesn't always cascade nicely in all DBs without config.
-        # Let's try raw deletes.
+        required_keys = {"products", "clients"}
+        if not required_keys.issubset(data.keys()):
+            raise HTTPException(400, detail="Invalid backup format: missing 'products' or 'clients'")
+
+        # 1. WIPE (FK-safe order: items -> sales -> payments -> products/clients -> users -> settings)
         session.exec(text("DELETE FROM saleitem"))
         session.exec(text("DELETE FROM sale"))
         session.exec(text("DELETE FROM payment"))
         session.exec(text("DELETE FROM product"))
         session.exec(text("DELETE FROM client"))
-        # We might want to keep the CURRENT admin user to not lock ourselves out?
-        # Or restore users but ensure current session user remains valid?
-        # If we wipe users, we might kill the session auth if it checks DB.
-        # Let's skip wiping Users for safety in this version, or update them.
-        # "users" export is there, but restoring might be tricky if password hashes change.
-        # User asked for "restore", usually implies 100% clone.
-        # Safe strategy: Restore Users but don't delete existing admin if not in backup?
-        # Simplest: Delete all users EXCEPT current one?
-        # Risk: Duplicate ID errors. 
-        # Better: Wipe Users table too, but re-add the current user if they disapper?
-        # Actually, if we restore, we restore the admin user from the backup too.
-        session.exec(text('DELETE FROM "user"')) 
+        session.exec(text('DELETE FROM "user"'))
         session.exec(text("DELETE FROM settings"))
-        
         session.commit()
-        
-        # 2. LOAD DATA
-        # Products (keep IDs for referential integrity with sales)
-        for p in data.get("products", []):
-            session.add(Product(**p))
-            
-        # Clients
-        for c in data.get("clients", []):
-            # Same for clients, keep IDs for sales linkage
-            session.add(Client(**c))
-            
-        # Users
-        for u in data.get("users", []):
-            session.add(User(**u))
-            
-        # Settings
-        for s in data.get("settings", []):
-            session.add(Settings(**s))
-            
-        session.flush() # Commit base tables
-        
-        # Sales
-        from datetime import datetime
-        for s in data.get("sales", []):
-            if 'timestamp' in s and isinstance(s['timestamp'], str):
-                s['timestamp'] = datetime.fromisoformat(s['timestamp'])
-            session.add(Sale(**s))
-            
-        session.flush()
-        
-        # Sale Items
-        for i in data.get("sale_items", []):
-            session.add(SaleItem(**i))
 
-        # Payments
+        # 2. RESTORE (sanitise every row through _safe_fields)
+        for p in data.get("products", []):
+            session.add(Product(**_safe_fields(Product, p)))
+
+        for c in data.get("clients", []):
+            session.add(Client(**_safe_fields(Client, c)))
+
+        for u in data.get("users", []):
+            session.add(User(**_safe_fields(User, u)))
+
+        for s in data.get("settings", []):
+            session.add(Settings(**_safe_fields(Settings, s)))
+
+        session.flush()
+
+        # Sales (parse timestamps)
+        for s in data.get("sales", []):
+            if "timestamp" in s and isinstance(s["timestamp"], str):
+                s["timestamp"] = datetime.fromisoformat(s["timestamp"])
+            session.add(Sale(**_safe_fields(Sale, s)))
+
+        session.flush()
+
+        for i in data.get("sale_items", []):
+            session.add(SaleItem(**_safe_fields(SaleItem, i)))
+
         for pay in data.get("payments", []):
-             if 'date' in pay and isinstance(pay['date'], str):
-                pay['date'] = datetime.fromisoformat(pay['date'])
-             session.add(Payment(**pay))
-             
+            if "date" in pay and isinstance(pay["date"], str):
+                pay["date"] = datetime.fromisoformat(pay["date"])
+            session.add(Payment(**_safe_fields(Payment, pay)))
+
         session.commit()
         return {"status": "success", "message": "System restored successfully"}
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
         session.rollback()
         return {"error": f"Restore failed: {str(e)}"}
+
