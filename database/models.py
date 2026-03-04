@@ -1,5 +1,5 @@
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlmodel import Field, SQLModel, Relationship
 
 # --- Tenant Model (Multi-Tenancy) ---
@@ -8,7 +8,7 @@ class Tenant(SQLModel, table=True):
     name: str
     subdomain: Optional[str] = Field(default=None, unique=True, index=True) # For SaaS URL routing
     is_active: bool = Field(default=True)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Relations
     users: List["User"] = Relationship(back_populates="tenant")
@@ -100,7 +100,7 @@ class Sale(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     total_amount: float = Field(default=0.0)
     payment_method: str = Field(default="cash") # cash, card, transfer
     amount_paid: float = Field(default=0.0)
@@ -134,7 +134,7 @@ class Payment(SQLModel, table=True):
     tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
     client_id: int = Field(foreign_key="client.id")
     amount: float
-    date: datetime = Field(default_factory=datetime.utcnow)
+    date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     note: Optional[str] = None
     
     # Relationship

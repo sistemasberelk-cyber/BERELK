@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
         "ALTER TABLE sale ADD COLUMN payment_status TEXT DEFAULT 'paid';"
     ]
     
-    print("🚀 [DEPLOY v2.5.2] Checking/Running Schema Migrations...")
+    print("🚀 [DEPLOY v2.6.0] Checking/Running Schema Migrations...")
     for stmt in migration_statements:
         try:
             session.exec(text(stmt))
@@ -1832,11 +1832,17 @@ def download_database_backup_file(filename: str, user: User = Depends(require_au
 async def restore_system_backup(file: UploadFile = File(...), session: Session = Depends(get_session), user: User = Depends(require_auth)):
     if user.role != "admin": raise HTTPException(403)
     
+    import gzip
     import json
     from sqlmodel import text
     
     try:
-        content = await file.read()
+        raw_content = await file.read()
+        # Support both .json.gz and plain .json backups
+        if file.filename and file.filename.endswith(".gz"):
+            content = gzip.decompress(raw_content)
+        else:
+            content = raw_content
         data = json.loads(content)
         
         # VALIDATION
@@ -1873,12 +1879,8 @@ async def restore_system_backup(file: UploadFile = File(...), session: Session =
         session.commit()
         
         # 2. LOAD DATA
-        # Products
+        # Products (keep IDs for referential integrity with sales)
         for p in data.get("products", []):
-            if 'id' in p: del p['id'] # Let DB auto-increment or keep IDs?
-            # Ideally keep IDs to maintain relationships if we import sales
-            # SQLModel/SQLAlchemy allows inserting IDs if explicitly set.
-            # Let's try to KEEP IDs from backup to ensure Sale integrity.
             session.add(Product(**p))
             
         # Clients
