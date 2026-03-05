@@ -126,11 +126,12 @@
         readerDiv.innerHTML = '<div style="padding:20px; text-align:center;">🔄 Iniciando Escáner...</div>';
 
         // A. CHECK FOR GOOGLE NATIVE BARCODE API
-        if ('BarcodeDetector' in window) {
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        if ('BarcodeDetector' in window && !isIOS) {
             console.log("🚀 Picking: Usando Google Native API");
             startNativeScanner(readerDiv);
         } else {
-            console.log("⚠️ Picking: Usando Legacy Lib");
+            console.log("⚠️ Picking: API nativa no disponible en iOS. Usando Legacy Lib");
             startLegacyScanner();
         }
     }
@@ -159,6 +160,7 @@
             nativeStream = stream;
             video.srcObject = stream;
             await new Promise(r => video.onloadedmetadata = r);
+            video.play().catch(e => console.warn("Autoplay prevent detectado:", e));
 
             // 3. Init Detector
             const formats = ['ean_13', 'code_128', 'qr_code', 'ean_8', 'upc_a', 'upc_e', 'codabar', 'itf'];
@@ -202,6 +204,7 @@
     }
 
     function startLegacyScanner() {
+        document.getElementById('reader').innerHTML = ''; // Limpiar UI previa
         if (html5QrcodeScanner === null) {
             html5QrcodeScanner = new Html5QrcodeScanner(
                 "reader",

@@ -171,11 +171,13 @@
             readerDiv.innerHTML = '<div style="padding:20px; text-align:center;">🔄 Iniciando Escáner...</div>';
 
             // A. CHECK FOR GOOGLE NATIVE BARCODE API (Chrome Android / ML Kit)
-            if ('BarcodeDetector' in window) {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+            if ('BarcodeDetector' in window && !isIOS) {
                 console.log("🚀 Usando Google Barcode Detection API (Nativo)");
                 startNativeScanner(readerDiv);
             } else {
-                console.log("⚠️ Google API no disponible. Usando librería Legacy (html5-qrcode).");
+                console.log("⚠️ Google API no compatible (iOS/Desktop). Usando librería Legacy (html5-qrcode).");
                 startLegacyScanner();
             }
         }
@@ -211,6 +213,7 @@
                 nativeStream = stream;
                 video.srcObject = stream;
                 await new Promise(r => video.onloadedmetadata = r);
+                video.play().catch(e => console.warn("Autoplay prevent detectado:", e));
 
                 // 3. Init Detector with robust formats
                 const formats = ['ean_13', 'code_128', 'qr_code', 'ean_8', 'upc_a', 'upc_e', 'codabar', 'itf'];
@@ -262,6 +265,7 @@
 
         // --- OPTION B: LEGACY (Compatible with iOS/Desktop) ---
         function startLegacyScanner() {
+            document.getElementById('reader').innerHTML = ''; // Limpiar UI previa
             if (html5QrcodeScanner === null) {
                 html5QrcodeScanner = new Html5QrcodeScanner(
                     "reader", {
