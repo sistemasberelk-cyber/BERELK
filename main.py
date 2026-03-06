@@ -349,9 +349,16 @@ def get_sales_page(request: Request, user: User = Depends(require_auth), setting
 @app.post("/sales/backup", response_class=HTMLResponse)
 def trigger_backup(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), tenant_id: int = Depends(get_tenant), session: Session = Depends(get_session)):
     from services.backup_service import perform_backup
-
+    from services.database_backup_service import create_backup_file
     
-    # Run backup
+    # Generate full JSON system snapshot BEFORE we wipe today's sales
+    try:
+        json_backup_result = create_backup_file(session)
+        print(f"INFO: Auto JSON backup generated during Cierre de Caja: {json_backup_result['filename']}")
+    except Exception as e:
+        print(f"ERROR: Failed to generate JSON backup during Cierre de Caja: {e}")
+    
+    # Run legacy backup to Google Sheets
     result = perform_backup(session)
     
     # If backup successful, DELETE today's sales to reset the counter (Only for this tenant)
