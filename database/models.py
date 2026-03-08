@@ -159,3 +159,64 @@ class BusinessConfig(SQLModel, table=True):
     voice_id: Optional[str] = None
     
     is_active: bool = Field(default=True)
+
+# ==========================================
+# NEW MODULE: PURCHASING & CASH MANAGEMENT
+# ==========================================
+
+# --- Supplier Model ---
+class Supplier(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    
+    name: str = Field(index=True)
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    cuit: Optional[str] = None
+    notes: Optional[str] = None
+    
+    purchases: List["Purchase"] = Relationship(back_populates="supplier")
+
+# --- Purchase Model (Comprobante de Ingreso/Compra) ---
+class Purchase(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    supplier_id: Optional[int] = Field(default=None, foreign_key="supplier.id")
+    
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    invoice_number: Optional[str] = None # Factura o Remito
+    total_amount: float = Field(default=0.0)
+    status: str = Field(default="pending") # pending, paid
+    
+    # Relationships
+    supplier: Optional[Supplier] = Relationship(back_populates="purchases")
+    items: List["PurchaseItem"] = Relationship(back_populates="purchase")
+
+# --- Purchase Detail ---
+class PurchaseItem(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    purchase_id: int = Field(foreign_key="purchase.id")
+    product_id: Optional[int] = Field(default=None, foreign_key="product.id")
+    
+    product_name: str
+    quantity: int
+    unit_cost: float
+    total: float
+    
+    purchase: Optional[Purchase] = Relationship(back_populates="items")
+
+# --- Cash Movement (Libro de Caja) ---
+class CashMovement(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    movement_type: str = Field(index=True) # "in" (ingreso), "out" (egreso)
+    amount: float
+    concept: str # e.g. "Pago a proveedor X", "Retiro para flete", "Venta N", etc.
+    
+    reference_id: Optional[int] = None # Can store sale_id, purchase_id, etc.
+    reference_type: Optional[str] = None # "sale", "purchase", "manual"
+    
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")

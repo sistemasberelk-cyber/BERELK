@@ -19,7 +19,7 @@ import gzip
 import pandas as pd
 
 from database.session import create_db_and_tables, get_session
-from database.models import Product, Sale, User, Settings, Client, Payment, Tax, SaleItem
+from database.models import Product, Sale, User, Settings, Client, Payment, Tax, SaleItem, Supplier, Purchase, PurchaseItem, CashMovement
 from database.seed_data import seed_products
 from services.stock_service import StockService
 from services.auth_service import AuthService
