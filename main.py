@@ -669,7 +669,13 @@ async def print_labels(
                     "description": product.description
                 })
     
-    if label_type == "exhibition":
+    if label_type == "100x50":
+        return templates.TemplateResponse("labels_100x50.html", {
+            "request": request, 
+            "labels": labels_to_print,
+            "hide_price": hide_price
+        })
+    elif label_type == "exhibition":
         return templates.TemplateResponse("print_layout_exhibition.html", {
             "request": request, 
             "labels": labels_to_print,

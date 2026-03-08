@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Impresión Etiquetas - 100x50mm</title>
+    <!-- Incluir JsBarcode para renderizado en cliente -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
+    <style>
+        /* CSS Reset para impresión */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #f0f0f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Ocultar botón de imprimir al imprimir */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            body {
+                background-color: white;
+            }
+
+            @page {
+                size: 100mm 50mm;
+                margin: 0;
+            }
+        }
+
+        /* Definición de la etiqueta física */
+        .label {
+            width: 100mm;
+            height: 50mm;
+            background: white;
+            page-break-after: always;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: row;
+            border: 1px dashed #ccc;
+            /* Guía de corte visual en pantalla */
+            margin-bottom: 20px;
+            /* Separación en pantalla */
+        }
+
+        @media print {
+            .label {
+                border: none;
+                margin-bottom: 0;
+            }
+        }
+
+        /* MITAD IZQUIERDA: Textos y Precios */
+        .left-panel {
+            width: 50%;
+            height: 100%;
+            padding: 4mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            border-right: 1px dotted #e5e7eb;
+        }
+
+        .product-name {
+            font-size: 14pt;
+            font-weight: 800;
+            color: #000;
+            line-height: 1.1;
+            margin-bottom: 2mm;
+            text-transform: uppercase;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .product-attr {
+            font-size: 9pt;
+            color: #333;
+            margin-bottom: 1mm;
+            font-weight: 600;
+        }
+
+        .product-attr span {
+            font-weight: 400;
+        }
+
+        .price-box {
+            margin-top: auto;
+            background: #000;
+            color: #fff;
+            padding: 2mm;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .price {
+            font-size: 16pt;
+            font-weight: 900;
+        }
+
+        /* MITAD DERECHA: Código de Barras */
+        .right-panel {
+            width: 50%;
+            height: 100%;
+            padding: 4mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .barcode-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* El canvas donde JsBarcode dibujará (ancho 100% de su contenedor) */
+        .barcode-canvas {
+            max-width: 100%;
+            max-height: 35mm;
+            object-fit: contain;
+        }
+
+        .controls {
+            margin: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="no-print controls">
+        <button onclick="window.print()"
+            style="padding: 10px 20px; font-size: 16px; background: #000; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            🖨️ IMPRIMIR ETIQUETAS (100x50mm)
+        </button>
+        <p style="margin-top: 10px; font-size: 12px; color: #666;">
+            Asegúrate de configurar tu impresora térmica en tamaño 100mm x 50mm, sin márgenes.
+        </p>
+    </div>
+
+    <div id="labels-container">
+        {% for label in labels %}
+        <div class="label">
+            <!-- MITAD IZQUIERDA -->
+            <div class="left-panel">
+                <div class="product-name">{{ label.name }}</div>
+
+                {% if label.item_number %}
+                <div class="product-attr">Art: <span>{{ label.item_number }}</span></div>
+                {% endif %}
+
+                {% if label.numeracion %}
+                <div class="product-attr">Talle: <span>{{ label.numeracion }}</span></div>
+                {% endif %}
+
+                {% if not hide_price %}
+                <div class="price-box">
+                    <div class="price">${{ label.price | int }}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- MITAD DERECHA -->
+            <div class="right-panel">
+                <div class="barcode-container">
+                    <svg class="barcode-canvas" data-value="{{ label.barcode }}"></svg>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Script para renderizar los códigos de barra de manera nativa y súper nítida en el browser -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var barcodeElements = document.querySelectorAll('.barcode-canvas');
+
+            barcodeElements.forEach(function (el) {
+                var val = el.getAttribute('data-value');
+                if (val) {
+                    try {
+                        // Intentar formato EAN13 si tiene 12 o 13 digitos
+                        if ((val.length === 12 || val.length === 13) && /^\d+$/.test(val)) {
+                            JsBarcode(el, val, {
+                                format: "EAN13",
+                                width: 2,
+                                height: 60,
+                                displayValue: true,
+                                fontSize: 16,
+                                fontOptions: "bold",
+                                margin: 0
+                            });
+                        } else {
+                            // CODE128 para alfanuméricos o longitudes dinámicas
+                            JsBarcode(el, val, {
+                                format: "CODE128",
+                                width: 2,
+                                height: 60,
+                                displayValue: true,
+                                fontSize: 16,
+                                fontOptions: "bold",
+                                margin: 0
+                            });
+                        }
+                    } catch (e) {
+                        console.error("Error generating barcode for " + val, e);
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>
