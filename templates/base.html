@@ -32,6 +32,9 @@
                 <a href="/picking" class="{% if active_page == 'picking' %}active{% endif %}">Picking</a>
                 {% if user and user.role == "admin" %}
                 <a href="/settings" class="{% if active_page == 'settings' %}active{% endif %}">Configuracion</a>
+                {% if user.tenant_id == 1 %}
+                <a href="/tenants" class="{% if active_page == 'tenants' %}active{% endif %}">Tenants</a>
+                {% endif %}
                 {% endif %}
             </div>
             {% if user %}

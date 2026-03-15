@@ -12,14 +12,14 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from sqlmodel import Session, delete, select
 
-from database.models import Client, Product, Sale, Settings, User
+from database.models import Client, Product, Sale, Settings, User, Tenant
 from database.session import get_session
 from services.auth_service import AuthService
 from services.database_backup_service import create_backup_file, get_local_backup_path, list_local_backups
 from services.migration_service import run_schema_migrations
 from services.settings_service import SettingsService
 from services.tenant_backup_service import export_tenant_snapshot, restore_tenant_snapshot
-from web.dependencies import get_settings, get_tenant, require_auth
+from web.dependencies import get_settings, get_tenant, require_auth, require_superadmin
 
 router = APIRouter()
 
@@ -156,6 +156,75 @@ def delete_user(
     session.delete(target)
     session.commit()
     return {"ok": True}
+
+
+# --- Tenants (Superadmin only) ---
+
+@router.get("/tenants", response_class=HTMLResponse)
+def list_tenants(
+    request: Request,
+    user: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    tenants = session.exec(select(Tenant)).all()
+    users = session.exec(select(User)).all()
+    user_counts = {}
+    for u in users:
+        user_counts[u.tenant_id] = user_counts.get(u.tenant_id, 0) + 1
+    return _templates().TemplateResponse(
+        "tenants.html",
+        {
+            "request": request,
+            "user": user,
+            "tenants": tenants,
+            "user_counts": user_counts,
+            "active_page": "tenants",
+        },
+    )
+
+
+@router.post("/api/tenants")
+def create_tenant(
+    name: str = Form(...),
+    subdomain: Optional[str] = Form(None),
+    admin_username: str = Form(...),
+    admin_password: str = Form(...),
+    admin_full_name: Optional[str] = Form(None),
+    session: Session = Depends(get_session),
+    user: User = Depends(require_superadmin),
+):
+    sub = (subdomain or "").strip().lower() or None
+    if sub:
+        existing = session.exec(select(Tenant).where(Tenant.subdomain == sub)).first()
+        if existing:
+            raise HTTPException(400, "Subdomain already in use")
+
+    tenant = Tenant(name=name.strip(), subdomain=sub)
+    session.add(tenant)
+    session.commit()
+    session.refresh(tenant)
+
+    settings = Settings(tenant_id=tenant.id, company_name=name.strip(), logo_url="/static/images/logo.png")
+    session.add(settings)
+
+    hashed = AuthService.get_password_hash(admin_password)
+    new_admin = User(
+        username=admin_username.strip(),
+        password_hash=hashed,
+        role="admin",
+        full_name=admin_full_name or f"Admin {name}",
+        tenant_id=tenant.id,
+    )
+    session.add(new_admin)
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        session.delete(tenant)
+        session.commit()
+        raise HTTPException(400, "Failed to create tenant/admin (username or subdomain conflict)")
+
+    return {"status": "success", "tenant_id": tenant.id}
 
 
 @router.get("/api/admin/backup")
