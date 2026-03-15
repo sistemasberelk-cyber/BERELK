@@ -44,6 +44,12 @@ def get_tenant(user: User = Depends(require_auth)) -> int:
     return user.tenant_id
 
 
+def require_superadmin(user: User = Depends(require_auth)) -> User:
+    if user.role != "admin" or user.tenant_id != 1:
+        raise HTTPException(status_code=403, detail="Superadmin required")
+    return user
+
+
 def get_settings(
     session: Session = Depends(get_session),
     user: Optional[User] = Depends(get_current_user),
