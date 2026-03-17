@@ -45,7 +45,15 @@
     <div class="glass-card" style="display: flex; flex-direction: column; min-height: 520px;">
         <!-- Removed redundant search bar -->
 
-        <div class="glass-card" style="flex: 1; display: flex; flex-direction: column;">
+        <div class="glass-card" style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
+            <div>
+                <label style="display:block; margin-bottom:6px; font-weight:600;">Cliente</label>
+                <select id="client-select"
+                    style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb; background: white;">
+                    <option value="">Cliente Casual</option>
+                </select>
+            </div>
+
             <div id="cart-items" style="flex: 1; overflow-y: auto;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead style="position: sticky; top: 0; background: white; border-bottom: 2px solid #eee;">
@@ -74,12 +82,7 @@
                     <span id="cart-total">$0.00</span>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                    <select id="client-select"
-                        style="padding: 12px; border-radius: 8px; border: 1px solid #e5e7eb; background: white;">
-                        <option value="">Cliente Casual</option>
-                        <!-- Populated by JS -->
-                    </select>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
                     <button onclick="checkout()" class="btn" style="width: 100%; font-size: 1.2rem;">Cobrar</button>
                 </div>
             </div>
