@@ -29,7 +29,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Error loading clients:', err);
     }
 
-    document.getElementById('product-results').innerHTML = '<div style="text-align:center; padding: 20px; color: #666;">Usa el buscador o el escaner para agregar productos.</div>';
+    const emptyMsg = '<div style="text-align:center; padding: 20px; color: #666;">Usa el buscador o el escáner para agregar productos.</div>';
+    document.getElementById('product-results').innerHTML = emptyMsg;
 
     document.getElementById('product-search').addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase();
@@ -38,13 +39,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             (p.barcode && p.barcode.includes(term)) ||
             (p.item_number && p.item_number.toLowerCase().includes(term))
         );
-        renderProducts(filtered);
+        if (!term) {
+            document.getElementById('product-results').innerHTML = emptyMsg;
+        } else {
+            renderProducts(filtered);
+        }
 
         const exactMatch = allProducts.find(p => p.barcode === term || (p.item_number && p.item_number.toLowerCase() === term));
         if (exactMatch) {
             addToCart(exactMatch);
             e.target.value = '';
-            renderProducts(allProducts);
+            document.getElementById('product-results').innerHTML = emptyMsg;
             document.getElementById('product-search').focus();
         }
     });
@@ -69,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (exact) {
             addToCart(exact);
             e.target.value = '';
-            renderProducts(allProducts);
+            document.getElementById('product-results').innerHTML = emptyMsg;
             return;
         }
 
@@ -82,7 +87,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (filtered.length > 0) {
             addToCart(filtered[0]);
             e.target.value = '';
-            renderProducts(allProducts);
+            document.getElementById('product-results').innerHTML = emptyMsg;
         }
     });
 });

@@ -8,28 +8,28 @@
     <!-- Left: Product Selection -->
     <div class="glass-card" style="min-height: 520px;">
         <h2>Scanner / Búsqueda</h2>
-        <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; align-items: center;">
+        <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center;">
             <!-- Quantity Selector -->
             <div
-                style="display: flex; align-items: center; background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+                style="display: flex; align-items: center; background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; width: 110px;">
                 <button onclick="document.getElementById('pos-qty').stepDown()"
-                    style="border:none; background:#f3f4f6; padding: 8px 12px; cursor: pointer;">-</button>
+                    style="border:none; background:#f3f4f6; padding: 6px 10px; cursor: pointer;">-</button>
                 <input type="number" id="pos-qty" value="1" min="1"
                     style="width: 50px; text-align: center; border:none; outline:none; font-weight: bold;">
                 <button onclick="document.getElementById('pos-qty').stepUp()"
-                    style="border:none; background:#f3f4f6; padding: 8px 12px; cursor: pointer;">+</button>
+                    style="border:none; background:#f3f4f6; padding: 6px 10px; cursor: pointer;">+</button>
             </div>
 
             <!-- Manual Enter Button -->
             <button onclick="triggerSearch()" class="btn"
-                style="height: 38px; padding: 0 16px; margin-right: 8px; background: #2563eb; color: white;">
+                style="height: 36px; padding: 0 12px; margin-right: 6px; background: #2563eb; color: white;">
                 ⏎
             </button>
 
             <input type="text" id="product-search" placeholder="Código / SKU" autofocus
-                style="margin-top: 0; width: 200px; max-width: 260px;">
+                style="margin-top: 0; width: 180px; max-width: 220px;">
             <button onclick="startScanner()" class="btn"
-                style="padding: 12px 16px; font-size: 1rem; display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap; background: #2563eb; color: white;">
+                style="padding: 10px 14px; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; flex-shrink: 0; white-space: nowrap; background: #2563eb; color: white;">
                 📷 Escanear
             </button>
 
