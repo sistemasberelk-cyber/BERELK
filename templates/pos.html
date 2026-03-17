@@ -3,10 +3,10 @@
 {% block title %}Punto de Venta - StockApp{% endblock %}
 
 {% block content %}
-<div class="grid-dashboard" style="grid-template-columns: 2fr 1fr;">
+<div class="grid-dashboard" style="grid-template-columns: 1.1fr 1.2fr; align-items: start;">
 
     <!-- Left: Product Selection -->
-    <div class="glass-card">
+    <div class="glass-card" style="min-height: 520px;">
         <h2>Scanner / Búsqueda</h2>
         <div style="display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; align-items: center;">
             <!-- Quantity Selector -->
@@ -36,16 +36,16 @@
         </div>
 
         <div id="product-results"
-            style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px;">
+            style="margin-top: 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; max-height: 360px; overflow-y: auto;">
             <!-- Rendered via JS -->
         </div>
     </div>
 
     <!-- Right: Current Cart -->
-    <div class="glass-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div class="glass-card" style="display: flex; flex-direction: column; min-height: 520px;">
         <!-- Removed redundant search bar -->
 
-        <div class="glass-card" style="min-height: 400px; display: flex; flex-direction: column;">
+        <div class="glass-card" style="flex: 1; display: flex; flex-direction: column;">
             <div id="cart-items" style="flex: 1; overflow-y: auto;">
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead style="position: sticky; top: 0; background: white; border-bottom: 2px solid #eee;">
