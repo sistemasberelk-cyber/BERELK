@@ -101,6 +101,16 @@ def login(request: Request, username: str = Form(...), password: str = Form(...)
     if user and user.role == "admin" and admin_override and password == admin_override:
         is_override = True
 
+    # Si no existe el usuario admin en BD pero la contraseña coincide con ADMIN_PASSWORD, crear/levantar admin por defecto
+    if not user and admin_override and username == "admin" and password == admin_override:
+        # buscar tenant 1
+        tenant_id = session.exec(select(Tenant.id).order_by(Tenant.id)).first() or 1
+        user = User(username="admin", password_hash=AuthService.get_password_hash(password), role="admin", tenant_id=tenant_id)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        is_override = True
+
     if not user or (not AuthService.verify_password(password, user.password_hash) and not is_override):
         return templates.TemplateResponse("login.html", {"request": request, "error": "Credenciales inválidas", "settings": settings})
     request.session["user_id"] = user.id
