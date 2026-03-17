@@ -61,7 +61,7 @@
             </div>
             <div id="ai-messages" style="padding: 12px; height: 240px; overflow-y: auto; font-size: 0.9rem;"></div>
             <div style="padding: 12px; border-top: 1px solid #e5e7eb;">
-                <textarea id="ai-input" rows="2" style="width: 100%; resize: none;" placeholder="Pregúntame sobre ventas, stock, caja..."></textarea>
+                <textarea id="ai-input" rows="2" style="width: 100%; resize: none;" placeholder="Pregúntame sobre ventas, stock, caja... (Enter para enviar, Shift+Enter para salto de línea)"></textarea>
                 <button onclick="sendAI()" class="btn" style="margin-top: 8px; width: 100%;">Enviar</button>
             </div>
         </div>
@@ -72,6 +72,12 @@
             p.style.display = forceClose ? 'none' : (p.style.display === 'none' ? 'block' : 'none');
         }
         document.getElementById('ai-toggle').addEventListener('click', () => toggleAI());
+        document.getElementById('ai-input').addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter' && !ev.shiftKey) {
+                ev.preventDefault();
+                sendAI();
+            }
+        });
         async function sendAI() {
             const box = document.getElementById('ai-input');
             const msg = box.value.trim();
