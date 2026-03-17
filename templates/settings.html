@@ -424,7 +424,15 @@
 `).join('');
 }
 
-    function openUserModal() { document.getElementById('user-modal').style.display = 'flex'; }
+    function openUserModal() {
+        const form = document.querySelector('#user-modal form');
+        form.reset();
+        form.querySelector('input[name="username"]').value = '';
+        form.querySelector('input[name="password"]').value = '';
+        form.querySelector('input[name="full_name"]').value = '';
+        form.querySelector('select[name="role"]').value = 'admin';
+        document.getElementById('user-modal').style.display = 'flex';
+    }
 
     async function createUser(e) {
         e.preventDefault();
