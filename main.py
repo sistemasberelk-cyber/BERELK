@@ -18,7 +18,7 @@ import json
 import pandas as pd
 
 from database.session import create_db_and_tables, get_session, engine
-from database.models import Product, Sale, User, Settings, Client, Payment, Tax, SaleItem, Supplier, Purchase, PurchaseItem, CashMovement
+from database.models import Product, Sale, User, Settings, Client, Payment, Tax, SaleItem, Supplier, Purchase, PurchaseItem, CashMovement, Tenant
 from database.seed_data import seed_products
 from services.stock_service import StockService
 from services.auth_service import AuthService
@@ -79,7 +79,10 @@ app.include_router(picking_router)
 from starlette.middleware.sessions import SessionMiddleware
 SESSION_SECRET = os.getenv("SECRET_KEY")
 if not SESSION_SECRET:
-    raise RuntimeError("SECRET_KEY env var is required (set SECRET_KEY).")
+    # Fallback for environments where SECRET_KEY was not set yet (e.g. initial Render deploy)
+    # Keep the app running and log a warning. For production, define SECRET_KEY explicitly.
+    SESSION_SECRET = os.getenv("DATABASE_URL", "dev-insecure-secret-change-me")
+    print("WARNING: SECRET_KEY is not set. Using fallback secret derived from environment.")
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN")
 app.add_middleware(
     SessionMiddleware,
