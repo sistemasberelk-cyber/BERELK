@@ -301,7 +301,7 @@ def reports_summary(
         .group_by(func.date(Sale.timestamp))
         .order_by(func.date(Sale.timestamp))
     ).all()
-    sales_by_day = [{"day": str(r.day), "total": float(r.total or 0)} for r in sales_rows]
+    sales_by_day = [{"day": str(r[0]), "total": float(r[1] or 0)} for r in sales_rows]
 
     top_rows = session.exec(
         select(
@@ -317,9 +317,9 @@ def reports_summary(
     ).all()
     top_products = [
         {
-            "product_name": r.product_name,
-            "units": int(r.units or 0),
-            "amount": float(r.amount or 0),
+            "product_name": r[0],
+            "units": int(r[1] or 0),
+            "amount": float(r[2] or 0),
         }
         for r in top_rows
     ]
@@ -336,10 +336,10 @@ def reports_summary(
     ).all()
     cash_by_day = []
     for r in cash_rows:
-        ingresos = float(r.ingresos or 0)
-        egresos = float(abs(r.egresos or 0))
+        ingresos = float(r[1] or 0)
+        egresos = float(abs(r[2] or 0))
         cash_by_day.append(
-            {"day": str(r.day), "ingresos": ingresos, "egresos": egresos, "balance": ingresos - egresos}
+            {"day": str(r[0]), "ingresos": ingresos, "egresos": egresos, "balance": ingresos - egresos}
         )
 
     # Client balances
@@ -348,13 +348,13 @@ def reports_summary(
         .where(Sale.tenant_id == tenant_id)
         .group_by(Sale.client_id)
     ).all()
-    client_sales_map = {row.client_id: float(row.total or 0) for row in client_sales if row.client_id}
+    client_sales_map = {row[0]: float(row[1] or 0) for row in client_sales if row[0]}
     client_payments = session.exec(
         select(Payment.client_id, func.sum(Payment.amount).label("total"))
         .where(Payment.tenant_id == tenant_id)
         .group_by(Payment.client_id)
     ).all()
-    client_pay_map = {row.client_id: float(row.total or 0) for row in client_payments if row.client_id}
+    client_pay_map = {row[0]: float(row[1] or 0) for row in client_payments if row[0]}
     clients = session.exec(select(Client).where(Client.tenant_id == tenant_id)).all()
     client_balances = []
     for client in clients:

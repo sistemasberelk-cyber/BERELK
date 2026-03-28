@@ -191,12 +191,12 @@ def get_clients_page(request: Request, user: User = Depends(require_auth), setti
     # 1. Get all sales grouped by client (for this tenant)
     sales_stmt = select(Sale.client_id, func.sum(Sale.total_amount).label('total')).where(Sale.tenant_id == tenant_id).group_by(Sale.client_id)
     sales_result = session.exec(sales_stmt).all()
-    sales_map = {r.client_id: r.total for r in sales_result}
+    sales_map = {r[0]: r[1] for r in sales_result}
 
     # 2. Get all payments grouped by client (for this tenant)
     payments_stmt = select(Payment.client_id, func.sum(Payment.amount).label('total')).where(Payment.tenant_id == tenant_id).group_by(Payment.client_id)
     payments_result = session.exec(payments_stmt).all()
-    payments_map = {r.client_id: r.total for r in payments_result}
+    payments_map = {r[0]: r[1] for r in payments_result}
 
     # 3. Merge
     balances = {}
