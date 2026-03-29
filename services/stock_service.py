@@ -75,11 +75,14 @@ class StockService:
         final_amount_paid = amount_paid if amount_paid is not None else total_sale
         
         # --- Credit Limit Check ---
-        if client_id and final_amount_paid < total_sale:
+        client = None
+        if client_id:
             from database.models import Client
             from sqlalchemy import func
             client = session.get(Client, client_id)
-            if client and client.tenant_id == tenant_id and client.credit_limit:
+            
+        if client and final_amount_paid < total_sale:
+            if client.tenant_id == tenant_id and client.credit_limit:
                  # Calculate current balance (Debt - Paid) for this tenant
                  
                  # Sum previous sales total
@@ -120,6 +123,19 @@ class StockService:
             )
             session.add(payment)
             
+        # Register in Cash Book
+        if final_amount_paid > 0 and payment_method != "cuenta_corriente":
+            from database.models import CashMovement
+            client_name = client.name if client else "Consumidor Final"
+            cash_movement = CashMovement(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                amount=final_amount_paid,
+                movement_type="in",
+                description=f"Ingreso por Venta a {client_name} - Medio: {payment_method}"
+            )
+            session.add(cash_movement)
+
         session.commit()
         session.refresh(sale)
         return sale
