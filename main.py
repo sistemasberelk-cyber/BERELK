@@ -90,6 +90,52 @@ app.add_middleware(
     same_site="lax",
 )
 
+@app.get("/sales", response_class=HTMLResponse)
+def get_sales_page(
+    request: Request,
+    user: User = Depends(require_auth),
+    settings: Settings = Depends(get_settings),
+    tenant_id: int = Depends(get_tenant),
+    session: Session = Depends(get_session)
+):
+    # Fetch sales restricted by tenant
+    sales = session.exec(
+        select(Sale)
+        .where(Sale.tenant_id == tenant_id)
+        .order_by(Sale.timestamp.desc())
+    ).all()
+    
+    low_stock_products = session.exec(
+        select(Product)
+        .where(Product.tenant_id == tenant_id, Product.stock_quantity <= Product.min_stock_level)
+    ).all()
+    
+    from collections import defaultdict
+    daily_groups = defaultdict(list)
+    for sale in sales:
+        date_str = sale.timestamp.strftime('%Y-%m-%d')
+        daily_groups[date_str].append(sale)
+        
+    daily_reports = []
+    for date_str, day_sales in daily_groups.items():
+        total = sum(s.total_amount for s in day_sales)
+        daily_reports.append({
+            "date": date_str,
+            "total": total,
+            "sales": day_sales
+        })
+    daily_reports.sort(key=lambda x: x['date'], reverse=True)
+
+    return templates.TemplateResponse("sales.html", {
+        "request": request,
+        "active_page": "sales",
+        "settings": settings,
+        "user": user,
+        "low_stock_products": low_stock_products,
+        "daily_reports": daily_reports
+    })
+
+
 @app.get("/login", response_class=HTMLResponse)
 @app.head("/login")
 def login_page(request: Request, settings: Settings = Depends(get_settings)):
