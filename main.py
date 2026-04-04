@@ -364,23 +364,29 @@ def trigger_backup(request: Request, user: User = Depends(require_auth), setting
     # Run legacy backup to Google Sheets
     result = perform_backup(session, tenant_id=tenant_id)
     
-    # If backup successful, mark today's sales as closed to clear the daily screens
-    if result["status"] == "success":
-        from sqlalchemy import true
-        today = date.today()
-        # Look for open sales
-        open_sales = session.exec(
-            select(Sale).where(
-                Sale.tenant_id == tenant_id,
-                Sale.is_closed == False
-            )
-        ).all()
+    # Siempre cerramos la caja, funcione o no el backup a Google Sheets (es opcional)
+    open_sales = session.exec(
+        select(Sale).where(
+            Sale.tenant_id == tenant_id,
+            Sale.is_closed == False
+        )
+    ).all()
+    
+    for sale in open_sales:
+        sale.is_closed = True
+        session.add(sale)
         
-        for sale in open_sales:
-            sale.is_closed = True
-            session.add(sale)
-        
-        session.commit()
+    # Marcador de Cierre de Caja
+    cierre_marker = CashMovement(
+        tenant_id=tenant_id,
+        movement_type="cierre",
+        amount=0.0,
+        concept="CIERRE_DE_CAJA",
+        timestamp=datetime.now(timezone.utc)
+    )
+    session.add(cierre_marker)
+    
+    session.commit()
     
     # Reload sales data to render the page (duplicated logic, could be refactored)
     sales = session.exec(select(Sale).where(Sale.tenant_id == tenant_id, Sale.is_closed == False).order_by(Sale.timestamp.desc())).all()
@@ -891,13 +897,29 @@ def get_cash_book(
 
     day_start = datetime.combine(target_date, datetime.min.time())
     day_end = day_start + timedelta(days=1)
+    
+    # SI no hay filtro de fecha (vista en vivo de hoy), buscamos el ultimo cierre de caja
+    if not date_filter:
+        last_cierre = session.exec(
+            select(CashMovement).where(
+                CashMovement.tenant_id == tenant_id,
+                CashMovement.timestamp >= day_start,
+                CashMovement.timestamp < day_end,
+                CashMovement.concept == "CIERRE_DE_CAJA"
+            ).order_by(CashMovement.timestamp.desc())
+        ).first()
+        
+        actual_start = last_cierre.timestamp if last_cierre else day_start
+    else:
+        actual_start = day_start
 
     movements = session.exec(
         select(CashMovement)
         .where(
             CashMovement.tenant_id == tenant_id,
-            CashMovement.timestamp >= day_start,
+            CashMovement.timestamp >= actual_start,
             CashMovement.timestamp < day_end,
+            CashMovement.concept != "CIERRE_DE_CAJA"
         )
         .order_by(CashMovement.timestamp.desc())
     ).all()
@@ -906,7 +928,7 @@ def get_cash_book(
         session.exec(
             select(func.sum(CashMovement.amount)).where(
                 CashMovement.tenant_id == tenant_id,
-                CashMovement.timestamp >= day_start,
+                CashMovement.timestamp >= actual_start,
                 CashMovement.timestamp < day_end,
                 CashMovement.movement_type == "in",
             )
@@ -917,7 +939,7 @@ def get_cash_book(
         session.exec(
             select(func.sum(CashMovement.amount)).where(
                 CashMovement.tenant_id == tenant_id,
-                CashMovement.timestamp >= day_start,
+                CashMovement.timestamp >= actual_start,
                 CashMovement.timestamp < day_end,
                 CashMovement.movement_type == "out",
             )
@@ -931,7 +953,7 @@ def get_cash_book(
     day_sales = session.exec(
         select(Sale).where(
             Sale.tenant_id == tenant_id,
-            Sale.timestamp >= day_start,
+            Sale.timestamp >= actual_start,
             Sale.timestamp < day_end
         )
     ).all()
