@@ -229,6 +229,19 @@
                         </div>
                     </div>
 
+                    <!-- WMS Locations Section -->
+                    <div id="p-locations-section" style="margin-top: 20px; background: #fffcf0; padding: 16px; border-radius: 12px; border: 1px solid #fef08a; display: none;">
+                        <label style="display: block; margin-bottom: 12px; font-weight: 700; color: #a16207; border-bottom: 1px solid #fef08a; padding-bottom: 4px; font-size: 0.9rem;">
+                            📍 Ubicaciones (WMS)
+                        </label>
+                        <div id="p-locations-list" style="display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Filled by loadLocations(id) -->
+                        </div>
+                        <div style="margin-top: 12px; font-size: 0.8rem; text-align: right;">
+                            <a href="/wms/transfers" style="color: #ca8a04; text-decoration: none; font-weight: 600;">Gestionar Movimientos →</a>
+                        </div>
+                    </div>
+
                     <div
                         style="margin-top: 32px; text-align: right; display: flex; justify-content: flex-end; gap: 12px;">
                         <button type="button" onclick="closeModal()" class="btn"
@@ -329,7 +342,40 @@
     }
     function closeModal() { document.getElementById('product-modal').style.display = 'none'; }
 
+    async function loadLocations(id) {
+        const list = document.getElementById('p-locations-list');
+        const section = document.getElementById('p-locations-section');
+        if (!id) {
+            section.style.display = 'none';
+            return;
+        }
+        
+        section.style.display = 'block';
+        list.innerHTML = '<div style="color: #6b7280; font-size: 0.85rem;">Cargando...</div>';
+        
+        try {
+            const res = await fetch(`/wms/api/products/${id}/locations`);
+            const data = await res.json();
+            if (data && data.length > 0) {
+                list.innerHTML = data.map(loc => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; background: white; padding: 6px 10px; border-radius: 8px; border: 1px solid #fef08a;">
+                        <div>
+                            <div style="font-weight: 600; color: #111827; font-size: 0.85rem;">${loc.bin_name}</div>
+                            <div style="font-size: 0.7rem; color: #6b7280;">${loc.location_name}</div>
+                        </div>
+                        <div style="font-weight: 800; color: #a16207;">${loc.quantity}</div>
+                    </div>
+                `).join('');
+            } else {
+                list.innerHTML = '<div style="color: #9ca3af; font-size: 0.8rem; font-style: italic;">Sin ubicación asignada</div>';
+            }
+        } catch (e) {
+            list.innerHTML = '<div style="color: #ef4444; font-size: 0.8rem;">Error al cargar</div>';
+        }
+    }
+
     function editProduct(id, name, price, stock, description, imageUrl, barcode, category, cantBulto, numeracion, itemNumber, priceBulk, priceRetail) {
+
         document.getElementById('product-modal').style.display = 'flex';
         document.getElementById('modal-title').innerText = 'Editar Producto';
         document.getElementById('edit-id').value = id;
@@ -351,7 +397,11 @@
 
         const barcodeField = document.getElementById('p-barcode');
         if (barcodeField) barcodeField.value = barcode || '';
+
+        // Load WMS locations
+        loadLocations(id);
     }
+
 
     async function deleteProduct(id) {
         if (!confirm('¿Estás seguro de eliminar este producto?')) return;
