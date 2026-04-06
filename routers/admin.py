@@ -299,7 +299,7 @@ def reports_summary(
         )
         .where(Sale.tenant_id == tenant_id, Sale.timestamp >= start_ts, Sale.timestamp < end_ts)
         .group_by(func.date(Sale.timestamp))
-        .order_by(func.date(Sale.timestamp))
+        .order_by(func.date(Sale.timestamp).desc())
     ).all()
     sales_by_day = [{"day": str(r[0]), "total": float(r[1] or 0)} for r in sales_rows]
 
@@ -332,7 +332,7 @@ def reports_summary(
         )
         .where(CashMovement.tenant_id == tenant_id, CashMovement.timestamp >= start_ts, CashMovement.timestamp < end_ts)
         .group_by(func.date(CashMovement.timestamp))
-        .order_by(func.date(CashMovement.timestamp))
+        .order_by(func.date(CashMovement.timestamp).desc())
     ).all()
     cash_by_day = []
     for r in cash_rows:
