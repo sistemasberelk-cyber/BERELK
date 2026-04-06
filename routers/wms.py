@@ -525,9 +525,12 @@ def wms_transfers_ui(
     
     # Enriquecer movimientos con nombres
     for m in movements:
-        m.product_name = session.get(Product, m.product_id).name
-        m.from_bin_name = session.get(Bin, m.from_bin_id).name if m.from_bin_id else None
-        m.to_bin_name = session.get(Bin, m.to_bin_id).name if m.to_bin_id else None
+        p = session.get(Product, m.product_id)
+        m.product_name = p.name if p else f"ID: {m.product_id}"
+        fb = session.get(Bin, m.from_bin_id) if m.from_bin_id else None
+        m.from_bin_name = fb.name if fb else (f"ID: {m.from_bin_id}" if m.from_bin_id else None)
+        tb = session.get(Bin, m.to_bin_id) if m.to_bin_id else None
+        m.to_bin_name = tb.name if tb else (f"ID: {m.to_bin_id}" if m.to_bin_id else None)
 
     return templates.TemplateResponse("wms_transfers.html", {
         "request": request,
