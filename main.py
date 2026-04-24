@@ -18,7 +18,7 @@ import json
 import pandas as pd
 
 from database.session import create_db_and_tables, get_session, engine
-from database.models import Product, Sale, User, Settings, Client, Payment, Tax, SaleItem, Supplier, Purchase, PurchaseItem, CashMovement
+from database.models import Product, Sale, User, Settings, Client, Payment, SaleItem, Supplier, Purchase, PurchaseItem, CashMovement, Tenant
 from database.seed_data import seed_products
 from services.stock_service import StockService
 from services.auth_service import AuthService
