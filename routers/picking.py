@@ -15,8 +15,8 @@ router = APIRouter()
 
 
 def _templates():
-    from fastapi.templating import Jinja2Templates
-    return Jinja2Templates(directory="templates")
+    from web.compat_templates import CompatTemplates
+    return CompatTemplates(directory="templates")
 
 
 def _find_product(session: Session, tenant_id: int, search_term: str):

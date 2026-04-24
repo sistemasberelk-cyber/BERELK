@@ -41,8 +41,8 @@ Formato: máximo 120 palabras, sin HTML.
 """
 
 def _templates():
-    from fastapi.templating import Jinja2Templates
-    return Jinja2Templates(directory="templates")
+    from web.compat_templates import CompatTemplates
+    return CompatTemplates(directory="templates")
 
 
 @router.get("/settings", response_class=HTMLResponse)
