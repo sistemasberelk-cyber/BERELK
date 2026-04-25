@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, status, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+# from fastapi.templating import Jinja2Templates
+from web.compat_templates import CompatTemplates
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select, func, text, delete
 from pydantic import BaseModel
@@ -30,7 +31,7 @@ from barcode.writer import ImageWriter
 
 # Setup
 stock_service = StockService(static_dir="static/barcodes")
-templates = Jinja2Templates(directory="templates")
+templates = CompatTemplates(directory="templates")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
