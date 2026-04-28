@@ -85,7 +85,6 @@ COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN")
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET,
-    domain=COOKIE_DOMAIN or None,
     same_site="lax",
 )
 
