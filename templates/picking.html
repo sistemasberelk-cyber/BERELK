@@ -73,7 +73,28 @@
 <!-- Audio for feedback -->
 <!-- Beep sound usage logic in JS -->
 
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script>
+    window.__html5QrcodeLoaded = false;
+    function loadScannerScript(src, onDone) {
+        const script = document.createElement('script');
+        script.src = src;
+        script.type = 'text/javascript';
+        script.onload = () => {
+            window.__html5QrcodeLoaded = typeof Html5QrcodeScanner !== 'undefined';
+            onDone();
+        };
+        script.onerror = onDone;
+        document.head.appendChild(script);
+    }
+
+    loadScannerScript('https://unpkg.com/html5-qrcode', () => {
+        if (!window.__html5QrcodeLoaded) {
+            loadScannerScript('https://cdn.jsdelivr.net/npm/html5-qrcode', () => {
+                window.__html5QrcodeLoaded = typeof Html5QrcodeScanner !== 'undefined';
+            });
+        }
+    });
+</script>
 <script>
     let currentMode = null; // 'entry' or 'exit'
     let html5QrcodeScanner = null;
@@ -205,7 +226,7 @@
 
     function startLegacyScanner() {
         document.getElementById('reader').innerHTML = ''; // Limpiar UI previa
-        if (typeof Html5QrcodeScanner === 'undefined' || typeof Html5QrcodeSupportedFormats === 'undefined') {
+        if (!window.__html5QrcodeLoaded || typeof Html5QrcodeScanner === 'undefined' || typeof Html5QrcodeSupportedFormats === 'undefined') {
             document.getElementById('reader').innerHTML = `
                 <div style="color:#dc2626; background:#fee2e2; border:1px solid #fecaca; padding:12px; border-radius:8px;">
                     No se pudo cargar la librería de escaneo. Verifica conexión a internet y recarga.
