@@ -3,196 +3,224 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Imprimir Etiquetas 100x50mm</title>
+    <title>Impresión Etiquetas - 100x50mm</title>
+    <!-- Incluir JsBarcode para renderizado en cliente -->
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.0/dist/JsBarcode.all.min.js"></script>
     <style>
-        @page {
-            size: 100mm 50mm;
+        /* CSS Reset para impresión */
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Arial', sans-serif;
-            margin: 0;
-            padding: 0;
-            background: #f0f0f0;
-        }
-
-        .no-print {
-            text-align: center;
-            padding: 20px;
-            background: white;
-            border-bottom: 1px solid #ddd;
-        }
-
-        .label-grid {
-            display: block;
-            margin: 0 auto;
-            padding: 20px;
-            max-width: 100mm;
-        }
-
-        .label {
-            width: 100mm;
-            height: 50mm;
-            box-sizing: border-box;
-            background: white;
-            position: relative;
-            overflow: hidden;
-            display: block;
-            padding: 4mm;
-            margin-bottom: 5mm;
-            border: 1px dashed #ccc;
-        }
-
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1mm;
-            height: 5mm;
-        }
-
-        .category {
-            font-size: 11pt;
-            color: #666;
-            text-transform: uppercase;
-            font-weight: bold;
-            text-align: right;
-            width: 100%;
-        }
-
-        .product-name {
-            font-size: 24pt;
-            font-weight: 900;
-            text-align: center;
-            line-height: 1;
-            margin-top: 2mm;
-            margin-bottom: 3mm;
-            height: 18mm;
-            overflow: hidden;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            line-clamp: 2;
-        }
-
-        .footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-top: auto;
-        }
-
-        .barcode-area {
+            background-color: #f0f0f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
-            flex-grow: 1;
         }
 
-        .barcode-img {
-            height: 16mm;
-            max-width: 70mm;
-            display: block;
+        /* Ocultar botón de imprimir al imprimir */
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+
+            body {
+                background-color: white;
+            }
+
+            @page {
+                size: 100mm 50mm;
+                margin: 0;
+            }
         }
 
-        .barcode-text {
-            display: none;
-        }
-
-        .item-number-badge {
-            font-size: 24pt;
-            font-weight: 900;
-            background: #000;
-            color: #fff;
-            padding: 2px 10px;
-            border-radius: 6px;
-            margin-top: 3mm;
-            display: inline-block;
-        }
-
-        .price-tag {
-            text-align: right;
-            padding-left: 4mm;
-        }
-
-        .price-label {
-            font-size: 9pt;
-            color: #666;
-            text-transform: uppercase;
-            font-weight: bold;
-        }
-
-        .price-value {
-            font-size: 28pt;
-            font-weight: 900;
-            color: #000;
-            line-height: 1;
+        /* Definición de la etiqueta física */
+        .label {
+            width: 100mm;
+            height: 50mm;
+            background: white;
+            page-break-after: always;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: row;
+            border: 1px dashed #ccc;
+            /* Guía de corte visual en pantalla */
+            margin-bottom: 20px;
+            /* Separación en pantalla */
         }
 
         @media print {
-            body {
-                background: white;
-            }
-
-            .no-print {
-                display: none;
-            }
-
-            .label-grid {
-                display: block;
-                padding: 0;
-                background: white;
-            }
-
             .label {
                 border: none;
-                margin: 0;
-                page-break-after: always;
-                page-break-inside: avoid;
+                margin-bottom: 0;
             }
+        }
+
+        /* MITAD IZQUIERDA: Textos y Precios */
+        .left-panel {
+            width: 50%;
+            height: 100%;
+            padding: 4mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            border-right: 1px dotted #e5e7eb;
+        }
+
+        .product-name {
+            font-size: 14pt;
+            font-weight: 800;
+            color: #000;
+            line-height: 1.1;
+            margin-bottom: 2mm;
+            text-transform: uppercase;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .product-attr {
+            font-size: 9pt;
+            color: #333;
+            margin-bottom: 1mm;
+            font-weight: 600;
+        }
+
+        .product-attr span {
+            font-weight: 400;
+        }
+
+        .price-box {
+            margin-top: auto;
+            background: #000;
+            color: #fff;
+            padding: 2mm;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .price {
+            font-size: 16pt;
+            font-weight: 900;
+        }
+
+        /* MITAD DERECHA: Código de Barras */
+        .right-panel {
+            width: 50%;
+            height: 100%;
+            padding: 4mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .barcode-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* El canvas donde JsBarcode dibujará (ancho 100% de su contenedor) */
+        .barcode-canvas {
+            max-width: 100%;
+            max-height: 35mm;
+            object-fit: contain;
+        }
+
+        .controls {
+            margin: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
     </style>
 </head>
 
 <body>
-    <div class="no-print">
-        <h2>Vista Previa (100mm x 50mm)</h2>
-        <p>Configura tu impresora en tamaño: <b>100mm x 50mm</b>.</p>
+    <div class="no-print controls">
         <button onclick="window.print()"
-            style="padding: 12px 24px; font-size: 18px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 8px; font-weight: bold;">🖨️
-            IMPRIMIR</button>
-        <button onclick="window.close()"
-            style="padding: 12px 24px; font-size: 16px; cursor: pointer; margin-left:12px; border: 1px solid #ccc; background: white; border-radius: 8px;">Cerrar</button>
+            style="padding: 10px 20px; font-size: 16px; background: #000; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            🖨️ IMPRIMIR ETIQUETAS (100x50mm)
+        </button>
+        <p style="margin-top: 10px; font-size: 12px; color: #666;">
+            Asegúrate de configurar tu impresora térmica en tamaño 100mm x 50mm, sin márgenes.
+        </p>
     </div>
 
-    <div class="label-grid">
-        {% for item in labels %}
+    <div id="labels-container">
+        {% for label in labels %}
         <div class="label">
-            <div class="header" style="text-align: right; margin-bottom: 2mm;">
-                <span class="category" style="float: right;">{{ item.category or '' }}</span>
+            <!-- MITAD IZQUIERDA -->
+            <div class="left-panel">
+                <div class="product-name">{{ label.name }}</div>
+
+                {% if label.item_number %}
+                <div class="product-attr">Art: <span>{{ label.item_number }}</span></div>
+                {% endif %}
+
+                {% if label.numeracion %}
+                <div class="product-attr">Talle: <span>{{ label.numeracion }}</span></div>
+                {% endif %}
+
             </div>
 
-            <div class="product-name" style="clear: both; width: 100%; text-align: center;">{{ item.name }}</div>
-
-            <div class="footer-area" style="position: absolute; bottom: 4mm; left: 4mm; right: 4mm; display: flex; justify-content: space-between; align-items: flex-end;">
-                <div class="barcode-area" style="text-align: center;">
-                    <img src="/static/barcodes/{{ item.barcode_file }}" class="barcode-img" alt="{{ item.barcode }}">
-                    {% if item.item_number %}
-                    <div class="item-number-badge">Art: {{ item.item_number }}</div>
-                    {% endif %}
+            <!-- MITAD DERECHA -->
+            <div class="right-panel">
+                <div class="barcode-container">
+                    <svg class="barcode-canvas" data-value="{{ label.barcode }}"></svg>
                 </div>
-
-                {% if not hide_price %}
-                <div class="price-tag">
-                    <div class="price-label">Precio</div>
-                    <div class="price-value">${{ "{:,.0f}".format(item.price) }}</div>
-                </div>
-                {% endif %}
             </div>
         </div>
         {% endfor %}
     </div>
+
+    <!-- Script para renderizar los códigos de barra de manera nativa y súper nítida en el browser -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            var barcodeElements = document.querySelectorAll('.barcode-canvas');
+
+            barcodeElements.forEach(function (el) {
+                var val = el.getAttribute('data-value');
+                if (val) {
+                    try {
+                        // Intentar formato EAN13 si tiene 12 o 13 digitos
+                        if ((val.length === 12 || val.length === 13) && /^\d+$/.test(val)) {
+                            JsBarcode(el, val, {
+                                format: "EAN13",
+                                width: 2,
+                                height: 60,
+                                displayValue: true,
+                                fontSize: 16,
+                                fontOptions: "bold",
+                                margin: 0
+                            });
+                        } else {
+                            // CODE128 para alfanuméricos o longitudes dinámicas
+                            JsBarcode(el, val, {
+                                format: "CODE128",
+                                width: 2,
+                                height: 60,
+                                displayValue: true,
+                                fontSize: 16,
+                                fontOptions: "bold",
+                                margin: 0
+                            });
+                        }
+                    } catch (e) {
+                        console.error("Error generating barcode for " + val, e);
+                    }
+                }
+            });
+        });
+    </script>
 </body>
 
 </html>

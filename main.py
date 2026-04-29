@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, status, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+# from fastapi.templating import Jinja2Templates
+from web.compat_templates import CompatTemplates
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select, func, text, delete
 from pydantic import BaseModel
@@ -14,28 +15,74 @@ import io
 import shutil
 import uuid
 import json
+import logging
+import re
 
 import pandas as pd
 
 from database.session import create_db_and_tables, get_session, engine
-from database.models import Product, Sale, User, Settings, Client, Payment, Tax, SaleItem, Supplier, Purchase, PurchaseItem, CashMovement, Tenant
+from database.models import Product, Sale, User, Settings, Client, Payment, SaleItem, Supplier, Purchase, PurchaseItem, CashMovement, Tenant
 from database.seed_data import seed_products
 from services.stock_service import StockService
 from services.auth_service import AuthService
 from routers.admin import router as admin_router
 from routers.picking import router as picking_router
+from routers.wms import router as wms_router
 from web.dependencies import get_current_user, get_settings, get_tenant, require_auth
+from web.compat_templates import CompatTemplates
 import barcode
 from barcode.writer import ImageWriter
 
+logger = logging.getLogger(__name__)
+
 # Setup
 stock_service = StockService(static_dir="static/barcodes")
-templates = Jinja2Templates(directory="templates")
+templates = CompatTemplates(directory="templates")
+
+
+def ensure_schema_compatibility(session: Session):
+    from sqlmodel import text
+    stmts = [
+        # WMS
+        "ALTER TABLE location ADD COLUMN IF NOT EXISTS tenant_id INTEGER",
+        "ALTER TABLE location ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE location ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
+        "ALTER TABLE bin ADD COLUMN IF NOT EXISTS tenant_id INTEGER",
+        "ALTER TABLE bin ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE bin ADD COLUMN IF NOT EXISTS max_capacity INTEGER",
+        "ALTER TABLE binstock ADD COLUMN IF NOT EXISTS tenant_id INTEGER",
+        "ALTER TABLE binstock ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE stockmovement ADD COLUMN IF NOT EXISTS tenant_id INTEGER",
+        "ALTER TABLE stockmovement ADD COLUMN IF NOT EXISTS request_id VARCHAR",
+        "ALTER TABLE stockmovement ADD COLUMN IF NOT EXISTS user_id INTEGER",
+        # Cash & Reports
+        "ALTER TABLE cashmovement ADD COLUMN IF NOT EXISTS reference_id INTEGER",
+        "ALTER TABLE cashmovement ADD COLUMN IF NOT EXISTS reference_type VARCHAR",
+        "ALTER TABLE cashmovement ADD COLUMN IF NOT EXISTS user_id INTEGER",
+        # Products & Clients (Compatibility)
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS price_bulk FLOAT",
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS price_retail FLOAT",
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS cant_bulto INTEGER",
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS numeracion VARCHAR",
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS curve_quantity INTEGER DEFAULT 1",
+        "ALTER TABLE client ADD COLUMN IF NOT EXISTS razon_social VARCHAR",
+        "ALTER TABLE client ADD COLUMN IF NOT EXISTS cuit VARCHAR",
+        "ALTER TABLE client ADD COLUMN IF NOT EXISTS iva_category VARCHAR",
+        "ALTER TABLE client ADD COLUMN IF NOT EXISTS transport_name VARCHAR",
+        "ALTER TABLE client ADD COLUMN IF NOT EXISTS transport_address VARCHAR",
+    ]
+    for stmt in stmts:
+        try:
+            session.exec(text(stmt))
+            session.commit()
+        except Exception:
+            session.rollback()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     with Session(engine) as session:
+        ensure_schema_compatibility(session)
         try:
             AuthService.create_default_user_and_settings(session)
         except Exception as e:
@@ -45,6 +92,7 @@ async def lifespan(app: FastAPI):
         if os.getenv("SEED_ON_START") == "1":
             seed_products(session)
     yield
+
 
 app = FastAPI(title="NexPos System", lifespan=lifespan)
 
@@ -69,72 +117,23 @@ def health_check():
     return {"status": "ok"}
 
 
-# Mount Static Files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(admin_router)
 app.include_router(picking_router)
+app.include_router(wms_router)
 
 # --- Auth Routes ---
 
 from starlette.middleware.sessions import SessionMiddleware
 SESSION_SECRET = os.getenv("SECRET_KEY")
 if not SESSION_SECRET:
-    # Fallback for environments where SECRET_KEY was not set yet (e.g. initial Render deploy)
-    # Keep the app running and log a warning. For production, define SECRET_KEY explicitly.
-    SESSION_SECRET = os.getenv("DATABASE_URL", "dev-insecure-secret-change-me")
-    print("WARNING: SECRET_KEY is not set. Using fallback secret derived from environment.")
+    raise RuntimeError("SECRET_KEY env var is required (set SECRET_KEY).")
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN")
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET,
     same_site="lax",
 )
-
-@app.get("/sales", response_class=HTMLResponse)
-def get_sales_page(
-    request: Request,
-    user: User = Depends(require_auth),
-    settings: Settings = Depends(get_settings),
-    tenant_id: int = Depends(get_tenant),
-    session: Session = Depends(get_session)
-):
-    # Fetch sales restricted by tenant
-    sales = session.exec(
-        select(Sale)
-        .where(Sale.tenant_id == tenant_id)
-        .order_by(Sale.timestamp.desc())
-    ).all()
-    
-    low_stock_products = session.exec(
-        select(Product)
-        .where(Product.tenant_id == tenant_id, Product.stock_quantity <= Product.min_stock_level)
-    ).all()
-    
-    from collections import defaultdict
-    daily_groups = defaultdict(list)
-    for sale in sales:
-        date_str = sale.timestamp.strftime('%Y-%m-%d')
-        daily_groups[date_str].append(sale)
-        
-    daily_reports = []
-    for date_str, day_sales in daily_groups.items():
-        total = sum(s.total_amount for s in day_sales)
-        daily_reports.append({
-            "date": date_str,
-            "total": total,
-            "sales": day_sales
-        })
-    daily_reports.sort(key=lambda x: x['date'], reverse=True)
-
-    return templates.TemplateResponse("sales.html", {
-        "request": request,
-        "active_page": "sales",
-        "settings": settings,
-        "user": user,
-        "low_stock_products": low_stock_products,
-        "daily_reports": daily_reports
-    })
-
 
 @app.get("/login", response_class=HTMLResponse)
 @app.head("/login")
@@ -524,6 +523,224 @@ def update_product_api(
     session.commit()
     return product
 
+@app.get("/reports/profitability", response_class=HTMLResponse)
+def get_profitability_report(
+    request: Request, 
+    start_date: Optional[str] = None, 
+    end_date: Optional[str] = None,
+    user: User = Depends(require_auth), 
+    tenant_id: int = Depends(get_tenant), 
+    session: Session = Depends(get_session)
+):
+    # Default range: current month
+    if not start_date:
+        start_date = date.today().replace(day=1).strftime("%Y-%m-%d")
+    if not end_date:
+        end_date = date.today().strftime("%Y-%m-%d")
+
+    s_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    e_dt = datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), datetime.max.time())
+
+    # Calculate net profit using historical cost captured at time of sale
+    from sqlalchemy import select
+    from database.models import SaleItem, Sale
+    
+    stmt = (
+        select(SaleItem)
+        .join(Sale)
+        .where(
+            Sale.tenant_id == tenant_id,
+            Sale.timestamp >= s_dt,
+            Sale.timestamp <= e_dt
+        )
+    )
+    items = session.exec(stmt).all()
+
+    total_revenue = 0.0
+    total_cost = 0.0
+    
+    for item in items:
+        qty = item.quantity or 0
+        price = item.unit_price or 0
+        cost = item.cost_price_at_sale or 0
+        total_revenue += (qty * price)
+        total_cost += (qty * cost)
+
+    profit = total_revenue - total_cost
+    margin = (profit / total_revenue * 100) if total_revenue > 0 else 0
+
+    return templates.TemplateResponse("reports/profitability.html", {
+        "request": request,
+        "total_revenue": total_revenue,
+        "total_cost": total_cost,
+        "profit": profit,
+        "margin": margin,
+        "start_date": start_date,
+        "end_date": end_date,
+        "user": user,
+        "settings": Depends(get_settings)
+    })
+
+@app.get("/reports/cash-flow", response_class=HTMLResponse)
+def get_cash_flow_report(
+    request: Request, 
+    date_filter: Optional[str] = None,
+    user: User = Depends(require_auth), 
+    tenant_id: int = Depends(get_tenant), 
+    session: Session = Depends(get_session)
+):
+    if not date_filter:
+        date_filter = date.today().strftime("%Y-%m-%d")
+
+    target_date_start = datetime.strptime(date_filter, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
+    target_date_end = datetime.strptime(date_filter, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+
+    from database.models import CashMovement
+    stmt = (
+        select(CashMovement)
+        .where(
+            CashMovement.tenant_id == tenant_id,
+            CashMovement.timestamp >= target_date_start,
+            CashMovement.timestamp <= target_date_end
+        )
+        .order_by(CashMovement.timestamp.desc())
+    )
+    movements = session.exec(stmt).all()
+
+    total_in_cash = 0.0
+    total_in_transfer = 0.0
+    total_out = 0.0
+    
+    for m in movements:
+        amt = m.amount or 0.0
+        if amt > 0:
+            if "transferencia" in m.concept.lower() or "transfer" in m.concept.lower():
+                total_in_transfer += amt
+            else:
+                total_in_cash += amt
+        else:
+            total_out += abs(amt)
+
+    balance = (total_in_cash + total_in_transfer) - total_out
+
+    return templates.TemplateResponse("reports/cash_flow.html", {
+        "request": request,
+        "date": date_filter,
+        "movements": movements,
+        "total_in_cash": total_in_cash,
+        "total_in_transfer": total_in_transfer,
+        "total_out": total_out,
+        "balance": balance,
+        "user": user,
+        "settings": Depends(get_settings)
+    })
+
+@app.get("/clients/{client_id}/account-statement", response_class=HTMLResponse)
+def get_client_statement_print(
+    request: Request, 
+    client_id: int, 
+    user: User = Depends(require_auth), 
+    tenant_id: int = Depends(get_tenant), 
+    session: Session = Depends(get_session)
+):
+    from database.models import Client, Sale, Payment, PaymentAllocation
+    client = session.exec(select(Client).where(Client.id == client_id, Client.tenant_id == tenant_id)).first()
+    if not client: raise HTTPException(404)
+
+    sales = session.exec(select(Sale).where(Sale.client_id == client_id, Sale.tenant_id == tenant_id)).all()
+    total_debt = sum([s.total_amount for s in sales])
+
+    payments = session.exec(select(Payment).where(Payment.client_id == client_id, Payment.tenant_id == tenant_id)).all()
+    total_paid = sum([p.amount for p in payments])
+    
+    invoice_data = []
+    for s in sales:
+        allocated = session.exec(
+            select(func.sum(PaymentAllocation.amount_applied))
+            .where(PaymentAllocation.sale_id == s.id)
+        ).one() or 0.0
+        
+        pending_on_invoice = s.total_amount - allocated
+        if pending_on_invoice > 0.01:
+            invoice_data.append({
+                "id": s.id,
+                "date": s.timestamp,
+                "total": s.total_amount,
+                "pending": pending_on_invoice,
+                "age_days": (datetime.now() - s.timestamp).days
+            })
+
+    return templates.TemplateResponse("reports/client_statement_pdf.html", {
+        "request": request,
+        "client": client,
+        "invoice_data": invoice_data,
+        "total_debt": total_debt,
+        "total_paid": total_paid,
+        "balance": total_debt - total_paid,
+        "settings": Depends(get_settings)
+    })
+
+@app.post("/api/products/import")
+async def import_products_excel(
+    file: UploadFile = File(...), 
+    session: Session = Depends(get_session), 
+    tenant_id: int = Depends(get_tenant), 
+    user: User = Depends(require_auth)
+):
+    if user.role != "admin": raise HTTPException(403)
+    
+    ext = file.filename.split(".")[-1].lower()
+    contents = await file.read()
+    
+    try:
+        if ext == "csv":
+            df = pd.read_csv(io.BytesIO(contents))
+        else:
+            df = pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(400, f"Error reading file: {str(e)}")
+
+    df.columns = [c.lower().strip() for c in df.columns]
+    
+    processed = 0
+    updated = 0
+    
+    for _, row in df.iterrows():
+        p_name = row.get("nombre") or row.get("name")
+        p_price = row.get("precio") or row.get("price") or 0
+        p_cost = row.get("costo") or row.get("cost") or 0
+        p_stock = row.get("stock") or 0
+        p_barcode = str(row.get("codigo") or row.get("barcode") or "").strip()
+        
+        if not p_name: continue
+        
+        existing = None
+        if p_barcode and p_barcode != "nan":
+            existing = session.exec(select(Product).where(Product.barcode == p_barcode, Product.tenant_id == tenant_id)).first()
+        else:
+            existing = session.exec(select(Product).where(Product.name == p_name, Product.tenant_id == tenant_id)).first()
+            
+        if existing:
+            existing.price = float(p_price)
+            existing.cost_price = float(p_cost)
+            existing.stock_quantity = int(p_stock)
+            session.add(existing)
+            updated += 1
+        else:
+            new_prod = Product(
+                tenant_id=tenant_id,
+                name=str(p_name),
+                price=float(p_price),
+                cost_price=float(p_cost),
+                stock_quantity=int(p_stock),
+                barcode=p_barcode if (p_barcode and p_barcode != "nan") else None
+            )
+            session.add(new_prod)
+            processed += 1
+            
+    session.commit()
+    return {"status": "success", "created": processed, "updated": updated}
+
 @app.delete("/api/products/{id}")
 def delete_product_api(id: int, session: Session = Depends(get_session), user: User = Depends(require_auth), tenant_id: int = Depends(get_tenant)):
     product = session.get(Product, id)
@@ -607,7 +824,13 @@ async def print_labels(
                     "description": product.description
                 })
     
-    if label_type == "exhibition":
+    if label_type == "100x50":
+        return templates.TemplateResponse("labels_100x50.html", {
+            "request": request, 
+            "labels": labels_to_print,
+            "hide_price": hide_price
+        })
+    elif label_type == "exhibition":
         return templates.TemplateResponse("print_layout_exhibition.html", {
             "request": request, 
             "labels": labels_to_print,
@@ -897,29 +1120,13 @@ def get_cash_book(
 
     day_start = datetime.combine(target_date, datetime.min.time())
     day_end = day_start + timedelta(days=1)
-    
-    # SI no hay filtro de fecha (vista en vivo de hoy), buscamos el ultimo cierre de caja
-    if not date_filter:
-        last_cierre = session.exec(
-            select(CashMovement).where(
-                CashMovement.tenant_id == tenant_id,
-                CashMovement.timestamp >= day_start,
-                CashMovement.timestamp < day_end,
-                CashMovement.concept == "CIERRE_DE_CAJA"
-            ).order_by(CashMovement.timestamp.desc())
-        ).first()
-        
-        actual_start = last_cierre.timestamp if last_cierre else day_start
-    else:
-        actual_start = day_start
 
     movements = session.exec(
         select(CashMovement)
         .where(
             CashMovement.tenant_id == tenant_id,
-            CashMovement.timestamp >= actual_start,
+            CashMovement.timestamp >= day_start,
             CashMovement.timestamp < day_end,
-            CashMovement.concept != "CIERRE_DE_CAJA"
         )
         .order_by(CashMovement.timestamp.desc())
     ).all()
@@ -928,7 +1135,7 @@ def get_cash_book(
         session.exec(
             select(func.sum(CashMovement.amount)).where(
                 CashMovement.tenant_id == tenant_id,
-                CashMovement.timestamp >= actual_start,
+                CashMovement.timestamp >= day_start,
                 CashMovement.timestamp < day_end,
                 CashMovement.movement_type == "in",
             )
@@ -939,7 +1146,7 @@ def get_cash_book(
         session.exec(
             select(func.sum(CashMovement.amount)).where(
                 CashMovement.tenant_id == tenant_id,
-                CashMovement.timestamp >= actual_start,
+                CashMovement.timestamp >= day_start,
                 CashMovement.timestamp < day_end,
                 CashMovement.movement_type == "out",
             )
@@ -948,53 +1155,6 @@ def get_cash_book(
     )
 
     balance = float(total_in + total_out)  # Out is negative
-
-    # --- Desglose (Breakdown) ---
-    day_sales = session.exec(
-        select(Sale).where(
-            Sale.tenant_id == tenant_id,
-            Sale.timestamp >= actual_start,
-            Sale.timestamp < day_end
-        )
-    ).all()
-
-    breakdown = {
-        "cash": 0.0,
-        "transfer": 0.0,
-        "cuenta_corriente": 0.0
-    }
-    
-    for s in day_sales:
-        if s.payment_method == "cash":
-            breakdown["cash"] += (s.amount_paid or 0.0)
-        elif s.payment_method == "transfer":
-            breakdown["transfer"] += (s.amount_paid or 0.0)
-        elif s.payment_method == "combinado":
-            # Si fue combinado, intentamos obtener el mix usando la base CashMovement o asumiendo
-            # pero mejor aún, como insertamos 2 cash_movements en la caja, podemos escanear los items.
-            pass
-            
-        # Cuenta corriente siempre es la diferencia entre el total y el pago recibido
-        if s.total_amount > (s.amount_paid or 0):
-            breakdown["cuenta_corriente"] += (s.total_amount - (s.amount_paid or 0))
-
-    # To be extremely accurate without complex parsing, we extract 'cash' and 'transfer' 
-    # directly from the day's IN movements concept strings:
-    real_b_cash = 0.0
-    real_b_transfer = 0.0
-    for mov in movements:
-        if mov.movement_type == "in":
-            if "Medio: Efectivo" in mov.concept:
-                real_b_cash += mov.amount
-            elif "Medio: Transferencia" in mov.concept:
-                real_b_transfer += mov.amount
-            elif "Medio: cash" in mov.concept:
-                real_b_cash += mov.amount
-            elif "Medio: transfer" in mov.concept:
-                real_b_transfer += mov.amount
-
-    breakdown["cash"] = real_b_cash
-    breakdown["transfer"] = real_b_transfer
 
     return templates.TemplateResponse(
         "cash_book.html",
@@ -1008,7 +1168,6 @@ def get_cash_book(
             "total_out": abs(total_out),
             "balance": balance,
             "selected_date": target_date.isoformat(),
-            "breakdown": breakdown,
         },
     )
 
@@ -1388,27 +1547,8 @@ def bulk_update_price(
     session.commit()
     return {"status": "success", "updated_count": count}
 
-# Taxes
-@app.get("/api/taxes")
-def get_taxes(session: Session = Depends(get_session)):
-    return session.exec(select(Tax)).all()
 
-@app.post("/api/taxes")
-def create_tax(name: str = Form(...), rate: float = Form(...), session: Session = Depends(get_session), user: User = Depends(require_auth)):
-    if user.role != "admin": raise HTTPException(403)
-    tax = Tax(name=name, rate=rate)
-    session.add(tax)
-    session.commit()
-    return tax
-
-@app.delete("/api/taxes/{id}")
-def delete_tax(id: int, session: Session = Depends(get_session), user: User = Depends(require_auth)):
-    if user.role != "admin": raise HTTPException(403)
-    tax = session.get(Tax, id)
-    if tax:
-        session.delete(tax)
-        session.commit()
-    return {"ok": True}
+# SEED TEST DATA
 
 # --- Test Data Seeder (Temporary) ---
 @app.get("/api/test/seed_products")
@@ -1455,6 +1595,10 @@ def print_labels_v2(
     session: Session = Depends(get_session),
     tenant_id: int = Depends(get_tenant)
 ):
+    allowed_layout_types = {"exhibition", "list", "100x50", "90x60", "100x60", "100x65"}
+    if layout_type not in allowed_layout_types:
+        raise HTTPException(400, "Invalid layout type")
+
     # Manual conversion because checkbox default handling can be tricky
     should_hide_price = False
     if hide_price and str(hide_price).lower() in ["true", "on", "1", "yes"]:
@@ -1462,12 +1606,50 @@ def print_labels_v2(
 
     import json
     from sqlmodel import col
+    if len(selected_items) > 20_000:
+        raise HTTPException(400, "Selection payload is too large")
+
     try:
         item_ids = json.loads(selected_items)
-    except:
-        raise HTTPException(400, "Invalid JSON selection")
-        
-    products = session.exec(select(Product).where(col(Product.id).in_(item_ids), Product.tenant_id == tenant_id)).all()
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(400, "Invalid JSON selection") from exc
+
+    if not isinstance(item_ids, list):
+        raise HTTPException(400, "Selection must be a JSON array")
+
+    validated_item_ids = []
+    for item_id in item_ids:
+        try:
+            numeric_id = int(item_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "Selection must only contain numeric ids") from exc
+        if numeric_id <= 0:
+            raise HTTPException(400, "Selection must only contain positive ids")
+        validated_item_ids.append(numeric_id)
+
+    if not validated_item_ids:
+        raise HTTPException(400, "No products were selected")
+
+    # Defensive constraints to keep request cost bounded and deterministic.
+    deduplicated_item_ids = list(dict.fromkeys(validated_item_ids))
+    max_items_per_request = 500
+    if len(deduplicated_item_ids) > max_items_per_request:
+        raise HTTPException(400, f"Selection exceeds max allowed items ({max_items_per_request})")
+
+    products = session.exec(
+        select(Product).where(
+            col(Product.id).in_(deduplicated_item_ids),
+            Product.tenant_id == tenant_id,
+        )
+    ).all()
+
+    found_ids = {product.id for product in products}
+    missing_ids = [item_id for item_id in deduplicated_item_ids if item_id not in found_ids]
+    if missing_ids:
+        raise HTTPException(404, f"Products not found for ids: {', '.join(map(str, missing_ids[:10]))}")
+
+    if not products:
+        raise HTTPException(404, "No products found for selected ids")
     
     # Prepare data for template
     labels_data = []
@@ -1482,27 +1664,38 @@ def print_labels_v2(
     
     for p in products:
         # Generate Barcode Image if not exists
-        bc_filename = f"{p.barcode}" # without extension for now, writer adds it
+        barcode_value = str(p.barcode or "").strip()
+        if not barcode_value:
+            logger.warning("Skipping barcode generation for product id=%s due to empty barcode", p.id)
+            continue
+
+        bc_filename = re.sub(r"[^A-Za-z0-9._-]", "_", barcode_value).strip("._-")
+        if not bc_filename:
+            logger.warning("Skipping barcode generation for product id=%s due to invalid barcode value", p.id)
+            continue
         full_path = f"{static_bc_path}/{bc_filename}"
         
         # Check if file exists (Code128 writer adds .png)
         if not os.path.exists(full_path + ".png"):
             try:
                 # Generate
-                my_code = Code128(p.barcode, writer=ImageWriter())
+                my_code = Code128(barcode_value, writer=ImageWriter())
                 my_code.save(full_path)
             except Exception as e:
-                print(f"Error generating barcode for {p.name}: {e}")
+                logger.exception("Error generating barcode for product id=%s name=%s", p.id, p.name)
                 
         labels_data.append({
             "name": p.name,
             "price": p.price_retail if p.price_retail else p.price, # Use Retail price if set
-            "barcode": p.barcode,
-            "barcode_file": f"{p.barcode}.png",
+            "barcode": barcode_value,
+            "barcode_file": f"{bc_filename}.png",
             "category": p.category,
             "description": p.description,
             "item_number": p.item_number
         })
+
+    if not labels_data:
+        raise HTTPException(422, "No valid labels could be generated")
         
     if layout_type == "exhibition":
         # 100x65mm (approx) - Exhibition cards
