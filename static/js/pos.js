@@ -7,8 +7,21 @@ function buildLineKey(productId, priceKey) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const res = await fetch('/api/products');
-    allProducts = await res.json();
+    try {
+        const res = await fetch('/api/products');
+        if (!res.ok) {
+            throw new Error(`No se pudo cargar productos (${res.status})`);
+        }
+        allProducts = await res.json();
+    } catch (err) {
+        console.error('Error loading products:', err);
+        allProducts = [];
+        const target = document.getElementById('product-results');
+        if (target) {
+            target.innerHTML = '<div style="text-align:center; padding: 20px; color: #b91c1c;">No se pudieron cargar productos. Recargá la página o iniciá sesión nuevamente.</div>';
+        }
+        return;
+    }
 
     try {
         const resClients = await fetch('/api/clients');
@@ -29,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Error loading clients:', err);
     }
 
-    document.getElementById('product-results').innerHTML = '<div style="text-align:center; padding: 20px; color: #666;">Usa el buscador o el escaner para agregar productos.</div>';
+    renderProducts(allProducts.slice(0, 30));
 
     document.getElementById('product-search').addEventListener('input', (e) => {
         const term = e.target.value.toLowerCase();
@@ -38,11 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             (p.barcode && p.barcode.includes(term)) ||
             (p.item_number && p.item_number.toLowerCase().includes(term))
         );
-        if (!term) {
-            document.getElementById('product-results').innerHTML = emptyMsg;
-        } else {
-            renderProducts(filtered);
-        }
+        renderProducts(filtered);
 
         const exactMatch = allProducts.find(p => p.barcode === term || (p.item_number && p.item_number.toLowerCase() === term));
         if (exactMatch) {
