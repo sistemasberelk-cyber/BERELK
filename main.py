@@ -435,6 +435,12 @@ def trigger_backup(request: Request, user: User = Depends(require_auth), setting
     print(f"DEBUG: Cierre de Caja - Tenant: {tenant_id}, Efectivo Detectado: {current_balance}, Transferencias: {val_in_transfer}")
     
     # --- 3. Registrar Movimiento de Cierre ---
+    close_markers = [m for m in movements_today if m.movement_type == "cierre" or (m.concept or "").startswith("CIERRE_DE_CAJA")]
+    latest_close = max(close_markers, key=lambda m: m.timestamp) if close_markers else None
+    has_activity_after_close = False
+    if latest_close:
+        has_activity_after_close = any((m.id != latest_close.id and m.timestamp > latest_close.timestamp) for m in movements_today)
+
     if current_balance > 0.01: # Evitar decimales ínfimos
         cierre_move = CashMovement(
             tenant_id=tenant_id,
@@ -445,7 +451,7 @@ def trigger_backup(request: Request, user: User = Depends(require_auth), setting
             timestamp=datetime.now(timezone.utc)
         )
         session.add(cierre_move)
-    else:
+    elif not latest_close or has_activity_after_close:
         session.add(CashMovement(
             tenant_id=tenant_id,
             movement_type="cierre",
@@ -676,11 +682,23 @@ def get_cash_flow_report(
     )
     movements = session.exec(stmt).all()
 
+    def is_close_movement(m: CashMovement) -> bool:
+        concept = (m.concept or "").upper()
+        return m.movement_type == "cierre" or concept.startswith("CIERRE_DE_CAJA")
+
+    last_close_ts = None
+    for m in movements:
+        if is_close_movement(m):
+            if last_close_ts is None or m.timestamp > last_close_ts:
+                last_close_ts = m.timestamp
+
+    effective_movements = [m for m in movements if not last_close_ts or m.timestamp > last_close_ts]
+
     total_in_cash = 0.0
     total_in_transfer = 0.0
     total_out = 0.0
     
-    for m in movements:
+    for m in effective_movements:
         amt = m.amount or 0.0
         if amt > 0:
             if "transferencia" in m.concept.lower() or "transfer" in m.concept.lower():
@@ -693,7 +711,7 @@ def get_cash_flow_report(
     from database.models import Sale
     # Avoid double counting: Only sum sales that DO NOT have an explicit CashMovement
     # with reference_type='sale' and reference_id = Sale.id
-    movement_sale_ids = {m.reference_id for m in movements if m.reference_type == "sale" and m.reference_id}
+    movement_sale_ids = {m.reference_id for m in effective_movements if m.reference_type == "sale" and m.reference_id}
     
     sales = session.exec(
         select(Sale).where(
@@ -705,6 +723,8 @@ def get_cash_flow_report(
     ).all()
 
     for s in sales:
+        if last_close_ts and s.timestamp <= last_close_ts:
+            continue
         if s.id in movement_sale_ids:
             continue  # Already counted via CashMovement
             
@@ -1227,11 +1247,23 @@ def get_cash_book(
         .order_by(CashMovement.timestamp.desc())
     ).all()
 
+    def is_close_movement(m: CashMovement) -> bool:
+        concept = (m.concept or "").upper()
+        return m.movement_type == "cierre" or concept.startswith("CIERRE_DE_CAJA")
+
+    last_close_ts = None
+    for m in movements:
+        if is_close_movement(m):
+            if last_close_ts is None or m.timestamp > last_close_ts:
+                last_close_ts = m.timestamp
+
+    effective_movements = [m for m in movements if not last_close_ts or m.timestamp > last_close_ts]
+
     total_in_cash = 0.0
     total_in_transfer = 0.0
     total_out = 0.0
     
-    for m in movements:
+    for m in effective_movements:
         amt = m.amount or 0.0
         if amt > 0:
             if m.movement_type == "in":
@@ -1245,7 +1277,7 @@ def get_cash_book(
             total_out += abs(amt)
 
     # Avoid double counting: Only sum sales that DO NOT have an explicit CashMovement
-    movement_sale_ids = {m.reference_id for m in movements if m.reference_type == "sale" and m.reference_id}
+    movement_sale_ids = {m.reference_id for m in effective_movements if m.reference_type == "sale" and m.reference_id}
     
     sales = session.exec(
         select(Sale).where(
@@ -1257,6 +1289,8 @@ def get_cash_book(
     ).all()
 
     for s in sales:
+        if last_close_ts and s.timestamp <= last_close_ts:
+            continue
         if s.id in movement_sale_ids:
             continue
             
