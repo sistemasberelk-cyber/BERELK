@@ -103,6 +103,8 @@
                 <thead>
                     <tr>
                         <th>Hora</th>
+                        <th>Cliente</th>
+                        <th>Medio</th>
                         <th>Vendedor</th>
                         <th>Total</th>
                         <th>Pagado</th>
@@ -115,6 +117,16 @@
                     {% for sale in report.sales %}
                     <tr>
                         <td>{{ sale.timestamp.strftime('%H:%M') }}</td>
+                        <td style="font-weight: 500;">
+                            {% if sale.client %}{{ sale.client.name }}{% else %}Consumidor Final{% endif %}
+                        </td>
+                        <td>
+                            {% if sale.payment_method == 'cash' %}💵 Efectivo
+                            {% elif sale.payment_method == 'transfer' %}🏦 Transferencia
+                            {% elif sale.payment_method == 'cuenta_corriente' %}📝 Cta. Corriente
+                            {% elif sale.payment_method == 'card' %}💳 Tarjeta
+                            {% else %}{{ sale.payment_method }}{% endif %}
+                        </td>
                         <td>
                             {% if sale.user_id %}Usuario #{{ sale.user_id }}{% else %}Sistema{% endif %}
                         </td>
@@ -122,14 +134,11 @@
                         <td>${{ "%.2f"|format(sale.amount_paid or 0) }}</td>
                         <td>
                             {% if sale.payment_status == 'paid' %}
-                            <span
-                                style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pagado</span>
+                            <span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pagado</span>
                             {% elif sale.payment_status == 'partial' %}
-                            <span
-                                style="background: #fef3c7; color: #d97706; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Parcial</span>
+                            <span style="background: #fef3c7; color: #d97706; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Parcial</span>
                             {% else %}
-                            <span
-                                style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pendiente</span>
+                            <span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pendiente</span>
                             {% endif %}
                         </td>
                         <td>

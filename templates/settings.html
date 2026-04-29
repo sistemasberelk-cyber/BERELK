@@ -31,6 +31,14 @@
             style="padding: 12px 24px; font-weight: 500; border-bottom: 2px solid transparent; color: #666; background: none; cursor: pointer;">
             Respaldo
         </button>
+        <button onclick="switchTab('security')" id="tab-security" class="tab-btn"
+            style="padding: 12px 24px; font-weight: 500; border-bottom: 2px solid transparent; color: #666; background: none; cursor: pointer;">
+            Seguridad
+        </button>
+        <button onclick="switchTab('ai')" id="tab-ai" class="tab-btn"
+            style="padding: 12px 24px; font-weight: 500; border-bottom: 2px solid transparent; color: #666; background: none; cursor: pointer;">
+            IA
+        </button>
     </div>
 
     <!-- GENERAL SETTINGS -->
@@ -71,6 +79,47 @@
         </form>
     </div>
 
+    <!-- AI -->
+    <div id="content-ai" class="tab-content" style="display: none;">
+        <h3 style="margin-bottom: 12px;">Asistente IA (Gemini Flash)</h3>
+        <p>Guarda la API key de Gemini para este tenant y prueba el asistente.</p>
+        <form id="ai-key-form" onsubmit="saveAIKey(event)" style="max-width: 400px;">
+            <label>API Key de Gemini</label>
+            <input type="password" id="ai-key" required placeholder="AIza...">
+            <button type="submit" class="btn" style="margin-top: 8px;">Guardar</button>
+            <button type="button" class="btn btn-secondary" style="margin-top: 8px; margin-left: 8px;" onclick="testAI()">Probar con ejemplo</button>
+        </form>
+        <div id="ai-key-msg" style="margin-top: 12px; color:#0f766e; font-weight:600;"></div>
+    </div>
+
+    <!-- SECURITY -->
+    <div id="content-security" class="tab-content" style="display: none;">
+        <h3 style="margin-bottom: 12px;">Seguridad</h3>
+        <p style="margin-bottom: 16px;">Cambia tu clave o reinicia la de otro usuario (solo admin).</p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+            <form id="form-change-pass" class="stacked-form glass-card" onsubmit="changeOwnPass(event)">
+                <h4>Mi contraseña</h4>
+                <label>Clave actual</label>
+                <input type="password" id="curr-pass" required>
+                <label>Nueva clave</label>
+                <input type="password" id="new-pass" required placeholder="Mínimo 12 chars, may/min/num/símbolo">
+                <label>Confirmar clave</label>
+                <input type="password" id="new-pass-2" required>
+                <button type="submit" class="btn" style="margin-top: 12px;">Actualizar mi clave</button>
+            </form>
+
+            <form id="form-reset-pass" class="stacked-form glass-card" onsubmit="resetUserPass(event)">
+                <h4>Reset para otro usuario</h4>
+                <label>ID de usuario</label>
+                <input type="number" id="reset-user-id" required min="1">
+                <label>Nueva clave</label>
+                <input type="password" id="reset-pass" required placeholder="Mínimo 12 chars, may/min/num/símbolo">
+                <button type="submit" class="btn btn-secondary" style="margin-top: 12px;">Resetear contraseña</button>
+                <small>Solo administradores pueden ejecutar este reset.</small>
+            </form>
+        </div>
+        <div id="security-msg" style="margin-top:12px;color:#0f766e;font-weight:600;"></div>
+    </div>
     <!-- USERS -->
     <div id="content-users" class="tab-content" style="display: none;">
         <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
@@ -176,12 +225,36 @@
                 (.json.gz)</button>
             <a href="/api/backup" target="_blank" class="btn" style="text-decoration:none; background:#334155;">Descarga
                 rápida JSON</a>
+            <form id="restore-form" onsubmit="restoreBackup(event)" style="display:flex; gap:8px; align-items:center;">
+                <input type="file" id="restore-file" accept=".json,.gz" required>
+                <button type="submit" class="btn btn-secondary">Restaurar JSON/.gz</button>
+            </form>
         </div>
+
+        <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+            <h4 style="margin-bottom: 12px; color: #ef4444;">⚠️ Restaurar Sistema</h4>
+            <p style="color: #64748b; font-size: 0.9em; margin-bottom: 16px;">
+                Cargue un archivo (.json o .json.gz) generado por la opción "Generar backup".
+                <strong>Esta acción borrará los datos actuales y restaurará el sistema al punto del backup.</strong>
+            </p>
+            <form onsubmit="restoreSystem(event)" style="display:flex; gap: 12px; align-items:flex-end;">
+                <div style="flex-grow: 1;">
+                    <label style="display:block; font-size: 0.8em; margin-bottom: 4px; font-weight: bold;">Archivo de
+                        Backup</label>
+                    <input type="file" name="file" accept=".json,.json.gz,application/json,application/gzip" required
+                        style="padding: 10px; border: 1px solid #ccc; width: 100%; border-radius: 8px;">
+                </div>
+                <button type="submit" class="btn" style="background-color: #ef4444; height: 42px;">Restaurar</button>
+            </form>
+        </div>
+
+        <h4 style="margin-top: 32px; margin-bottom: 12px;">Historial Local de Backups</h4>
 
         <div id="backup-list"
             style="font-size: 0.9rem; color:#334155; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px;">
             Cargando backups...
         </div>
+        <div id="backup-msg" style="margin-top:8px; color:#0f766e; font-weight:600;"></div>
     </div>
 
 </div>
@@ -252,6 +325,100 @@
         if (tab === 'users') loadUsers();
         if (tab === 'taxes') loadTaxes();
         if (tab === 'backup') loadBackupFiles();
+        if (tab === 'security') document.getElementById('security-msg').textContent = '';
+        if (tab === 'ai') loadAIKey();
+    }
+
+    // --- Security ---
+    async function changeOwnPass(e) {
+        e.preventDefault();
+        const curr = document.getElementById('curr-pass').value;
+        const n1 = document.getElementById('new-pass').value;
+        const n2 = document.getElementById('new-pass-2').value;
+        if (n1 !== n2) return showSecurityMsg('Las claves no coinciden', true);
+        const data = new FormData();
+        data.append('current_password', curr);
+        data.append('new_password', n1);
+        const res = await fetch('/api/users/change-password', { method: 'POST', body: data });
+        if (res.ok) {
+            showSecurityMsg('Clave actualizada. Vuelve a iniciar sesión.', false);
+            setTimeout(() => window.location = '/logout', 1200);
+        } else {
+            const txt = await res.text();
+            showSecurityMsg(extractErr(txt), true);
+        }
+    }
+
+    async function resetUserPass(e) {
+        e.preventDefault();
+        const uid = document.getElementById('reset-user-id').value;
+        const pwd = document.getElementById('reset-pass').value;
+        const data = new FormData();
+        data.append('new_password', pwd);
+        const res = await fetch(`/api/users/${uid}/reset-password`, { method: 'POST', body: data });
+        if (res.ok) {
+            showSecurityMsg('Clave reseteada para el usuario ID ' + uid, false);
+        } else {
+            const txt = await res.text();
+            showSecurityMsg(extractErr(txt), true);
+        }
+    }
+
+    function prefillReset(id, username) {
+        document.getElementById('reset-user-id').value = id;
+        document.getElementById('reset-pass').focus();
+        showSecurityMsg('Resetearás la clave de ' + username, false);
+        switchTab('security');
+    }
+
+    function showSecurityMsg(msg, isError) {
+        const el = document.getElementById('security-msg');
+        el.style.color = isError ? '#b91c1c' : '#0f766e';
+        el.textContent = msg;
+    }
+
+    // --- AI ---
+    async function loadAIKey() {
+        const res = await fetch('/api/ai/key');
+        const data = await res.json();
+        const msg = document.getElementById('ai-key-msg');
+        msg.style.color = '#0f766e';
+        msg.textContent = data.exists ? 'API key cargada para este tenant.' : 'Aún no configurada.';
+    }
+
+    async function saveAIKey(e) {
+        e.preventDefault();
+        const key = document.getElementById('ai-key').value;
+        const fd = new FormData();
+        fd.append('api_key', key);
+        const res = await fetch('/api/ai/key', { method: 'POST', body: fd });
+        const msg = document.getElementById('ai-key-msg');
+        if (res.ok) {
+            msg.style.color = '#0f766e';
+            msg.textContent = 'Guardada. El asistente ya puede responder.';
+            document.getElementById('ai-key').value = '';
+        } else {
+            msg.style.color = '#b91c1c';
+            msg.textContent = 'Error al guardar';
+        }
+    }
+
+    async function testAI() {
+        const msgBox = document.getElementById('ai-key-msg');
+        try {
+            const res = await fetch('/api/ai/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: 'Dame un resumen de ventas de los últimos 7 días' })
+            });
+            if (!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            msgBox.style.color = '#0f766e';
+            msgBox.textContent = 'Respuesta: ' + data.answer;
+        } catch (err) {
+            msgBox.style.color = '#b91c1c';
+            msgBox.textContent = 'Error: ' + err.message;
+        }
     }
 
     // --- Users ---
@@ -265,15 +432,26 @@
                 <td>${u.full_name || '-'}</td>
                 <td><span class="badge ${u.role === 'admin' ? 'admin' : ''}">${u.role}</span></td>
                 <td>
-                    ${u.role !== 'admin' || u.id !== currentUserId ? `
-                    <button onclick="deleteUser(${u.id})" style="color: red; border:none; background:none; cursor:pointer;">Eliminar</button>
-                    ` : ''}
-                </td>
-            </tr>
-        `).join('');
-    }
+            ${u.role !== 'admin' || u.id !== currentUserId ? `
+            <button onclick="deleteUser(${u.id})" style="color: red; border:none; background:none; cursor:pointer;">Eliminar</button>
+            ` : ''}
+            ${u.id !== currentUserId ? `
+            <button onclick="prefillReset(${u.id}, '${"${"}{u.username}"}')" style="margin-left:8px; border:none; background:none; color:#0f766e; cursor:pointer;">Reset clave</button>
+            ` : ''}
+        </td>
+    </tr>
+`).join('');
+}
 
-    function openUserModal() { document.getElementById('user-modal').style.display = 'flex'; }
+    function openUserModal() {
+        const form = document.querySelector('#user-modal form');
+        form.reset();
+        form.querySelector('input[name="username"]').value = '';
+        form.querySelector('input[name="password"]').value = '';
+        form.querySelector('input[name="full_name"]').value = '';
+        form.querySelector('select[name="role"]').value = 'admin';
+        document.getElementById('user-modal').style.display = 'flex';
+    }
 
     async function createUser(e) {
         e.preventDefault();
@@ -444,6 +622,62 @@
 
         alert(`Backup generado: ${payload.filename}`);
         loadBackupFiles();
+    }
+
+<<<<<<< HEAD
+    async function restoreSystem(e) {
+        e.preventDefault();
+
+        if (!confirm("⚠️ ADVERTENCIA CRÍTICA ⚠️\n\nEstá a punto de RESTAURAR la base de datos desde un archivo. ¡Todo el progreso actual que no esté en este backup SE PERDERÁ! (Ventas de hoy, nuevos productos, etc).\n\n¿Está 100% seguro de que desea continuar?")) return;
+
+        const data = new FormData(e.target);
+        const btn = e.target.querySelector('button');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "Restaurando (Puede tardar)...";
+
+        try {
+            const res = await fetch('/api/admin/restore', { method: 'POST', body: data });
+            const result = await res.json();
+
+            if (res.ok && result.status === "success") {
+                alert("✅ Sistema Restaurado con Éxito. La página se recargará ahora.");
+                window.location.reload();
+            } else {
+                alert(`❌ Error en la restauración: ${result.error || result.detail || 'Archivo inválido o corrupto.'}`);
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        } catch (err) {
+            alert("❌ Error crítico de conexión durante la restauración.");
+            btn.disabled = false;
+            btn.innerText = originalText;
+=======
+    async function restoreBackup(e) {
+        e.preventDefault();
+        const fileInput = document.getElementById('restore-file');
+        if (!fileInput.files.length) return;
+        const data = new FormData();
+        data.append('file', fileInput.files[0]);
+        const msg = document.getElementById('backup-msg');
+        msg.style.color = '#0f766e';
+        msg.textContent = 'Restaurando...';
+        try {
+            const res = await fetch('/api/admin/restore', { method: 'POST', body: data });
+            const payload = await res.json();
+            if (!res.ok || payload.error) {
+                msg.style.color = '#b91c1c';
+                msg.textContent = payload.error || payload.detail || 'Error al restaurar';
+            } else {
+                msg.style.color = '#0f766e';
+                msg.textContent = 'Restauración completa.';
+                loadBackupFiles();
+            }
+        } catch (err) {
+            msg.style.color = '#b91c1c';
+            msg.textContent = 'Error: ' + err;
+>>>>>>> feature/wms-depositos
+        }
     }
 </script>
 

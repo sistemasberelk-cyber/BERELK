@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Tenants - NexPos{% endblock %}
+{% block content %}
+<div class="glass-card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:12px; flex-wrap: wrap;">
+    <h2>Tenants</h2>
+    <button class="btn" onclick="document.getElementById('tenant-modal').style.display='flex'">+ Nuevo Tenant</button>
+  </div>
+  <div class="table-container">
+    <table>
+      <thead><tr><th>ID</th><th>Nombre</th><th>Subdominio</th><th>Usuarios</th><th>Estado</th><th>Creado</th></tr></thead>
+      <tbody>
+      {% for t in tenants %}
+        <tr>
+          <td>{{ t.id }}</td>
+          <td>{{ t.name }}</td>
+          <td>{{ t.subdomain or '-' }}</td>
+          <td>{{ user_counts.get(t.id, 0) }}</td>
+          <td>{{ 'Activo' if t.is_active else 'Inactivo' }}</td>
+          <td>{{ t.created_at }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" style="text-align:center; padding:20px;">Sin tenants</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="tenant-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px); z-index:100; justify-content:center; align-items:center;">
+  <div class="glass-card" style="width:100%; max-width:520px;">
+    <h3 style="margin-bottom:16px;">Nuevo Tenant</h3>
+    <form id="tenant-form">
+      <label>Nombre</label><input type="text" name="name" required style="width:100%; margin-bottom:10px;">
+      <label>Subdominio (opcional)</label><input type="text" name="subdomain" placeholder="miempresa" style="width:100%; margin-bottom:10px;">
+      <label>Usuario admin</label><input type="text" name="admin_username" required style="width:100%; margin-bottom:10px;">
+      <label>Password admin</label><input type="password" name="admin_password" required style="width:100%; margin-bottom:10px;">
+      <label>Nombre completo admin (opcional)</label><input type="text" name="admin_full_name" style="width:100%; margin-bottom:16px;">
+      <div style="text-align:right; display:flex; gap:10px; justify-content:flex-end;">
+        <button type="button" class="btn" style="background:#94a3b8;" onclick="closeModal()">Cancelar</button>
+        <button type="submit" class="btn">Crear</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function closeModal(){document.getElementById('tenant-modal').style.display='none';}
+document.getElementById('tenant-form').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const data = new FormData(e.target);
+  const res = await fetch('/api/tenants', {method:'POST', body:data});
+  const payload = await res.json().catch(()=>({}));
+  if(res.ok){window.location.reload();} else {alert(payload.detail || payload.error || 'Error al crear tenant');}
+});
+</script>
+{% endblock %}

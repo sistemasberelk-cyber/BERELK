@@ -6,27 +6,43 @@ import os
 import uuid
 from io import BytesIO
 from typing import Optional
+from datetime import datetime, date, timedelta
+from sqlalchemy import case
 
 import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response, StreamingResponse
 from sqlmodel import Session, delete, select
 
-from database.models import Client, Product, Sale, Settings, User
+from database.models import Client, Product, Sale, Settings, User, Tenant, SaleItem, CashMovement, Supplier, Payment, Purchase, AICredential
 from database.session import get_session
 from services.auth_service import AuthService
 from services.database_backup_service import create_backup_file, get_local_backup_path, list_local_backups
 from services.migration_service import run_schema_migrations
 from services.settings_service import SettingsService
 from services.tenant_backup_service import export_tenant_snapshot, restore_tenant_snapshot
-from web.dependencies import get_settings, get_tenant, require_auth
+from services.purchase_service import PurchaseService
+from web.dependencies import get_settings, get_tenant, require_auth, require_superadmin
+from sqlmodel import func, col
+import requests
 
 router = APIRouter()
 
+SUPPORT_CONSTITUTION = """
+Eres el asistente oficial de soporte del sistema NexPos Cloud.
+Reglas:
+- Responde en español, tono breve, claro y amable.
+- No inventes datos: usa solo la información suministrada por el backend (KPIs y contexto).
+- Si falta dato o rango de fechas, solicita un filtro concreto.
+- No reveles credenciales ni keys. No pidas API keys al usuario final.
+- Respeta el rol del usuario: cashier no ve costos ni gestión de usuarios; admin sí.
+- Si la pregunta no es del negocio/soporte del sistema, indícalo y ofrece ayuda sobre reportes, ventas, stock, caja, usuarios o configuración.
+Formato: máximo 120 palabras, sin HTML.
+"""
 
 def _templates():
-    from fastapi.templating import Jinja2Templates
-    return Jinja2Templates(directory="templates")
+    from web.compat_templates import CompatTemplates
+    return CompatTemplates(directory="templates")
 
 
 @router.get("/settings", response_class=HTMLResponse)
@@ -156,6 +172,363 @@ def delete_user(
     session.delete(target)
     session.commit()
     return {"ok": True}
+
+# --- Password management ---
+
+def _validate_password_strength(pwd: str):
+    if len(pwd) < 12:
+        raise HTTPException(400, "La clave debe tener al menos 12 caracteres.")
+    if pwd.lower() == pwd or pwd.upper() == pwd:
+        raise HTTPException(400, "Usa mayúsculas y minúsculas.")
+    if not any(c.isdigit() for c in pwd):
+        raise HTTPException(400, "Incluye al menos un número.")
+    if not any(c in "!@#$%^&*()-_=+[]{};:,<.>/?\\|" for c in pwd):
+        raise HTTPException(400, "Incluye al menos un símbolo.")
+
+
+@router.post("/api/users/change-password")
+def change_own_password(
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    user: User = Depends(require_auth),
+    session: Session = Depends(get_session),
+):
+    if not AuthService.verify_password(current_password, user.password_hash):
+        raise HTTPException(400, "La clave actual es incorrecta")
+    _validate_password_strength(new_password)
+    user.password_hash = AuthService.get_password_hash(new_password)
+    session.add(user)
+    session.commit()
+    return {"status": "ok"}
+
+
+@router.post("/api/users/{id}/reset-password")
+def admin_reset_password(
+    id: int,
+    new_password: str = Form(...),
+    user: User = Depends(require_auth),
+    session: Session = Depends(get_session),
+    tenant_id: int = Depends(get_tenant),
+):
+    SettingsService.ensure_admin(user)
+    target = session.get(User, id)
+    if not target or target.tenant_id != tenant_id:
+        raise HTTPException(404, "Usuario no encontrado")
+    _validate_password_strength(new_password)
+    target.password_hash = AuthService.get_password_hash(new_password)
+    session.add(target)
+    session.commit()
+    return {"status": "ok"}
+
+
+@router.get("/api/ai/key")
+def get_ai_key(
+    session: Session = Depends(get_session),
+    user: User = Depends(require_auth),
+    tenant_id: int = Depends(get_tenant),
+):
+    SettingsService.ensure_admin(user)
+    cred = session.exec(select(AICredential).where(AICredential.tenant_id == tenant_id)).first()
+    return {"exists": bool(cred), "provider": cred.provider if cred else None}
+
+
+@router.post("/api/ai/key")
+def set_ai_key(
+    api_key: str = Form(...),
+    provider: str = Form("gemini"),
+    session: Session = Depends(get_session),
+    user: User = Depends(require_auth),
+    tenant_id: int = Depends(get_tenant),
+):
+    SettingsService.ensure_admin(user)
+    cred = session.exec(select(AICredential).where(AICredential.tenant_id == tenant_id)).first()
+    if cred:
+        cred.api_key = api_key.strip()
+        cred.provider = provider
+    else:
+        cred = AICredential(tenant_id=tenant_id, api_key=api_key.strip(), provider=provider)
+    session.add(cred)
+    session.commit()
+    return {"status": "ok"}
+
+
+# --- Reports & Metrics ---
+
+def _parse_date(date_str: Optional[str]) -> Optional[date]:
+    if not date_str:
+        return None
+    try:
+        return datetime.fromisoformat(date_str).date()
+    except Exception:
+        return None
+
+
+@router.get("/reports", response_class=HTMLResponse)
+def reports_page(
+    request: Request,
+    user: User = Depends(require_auth),
+    settings: Settings = Depends(get_settings),
+):
+    SettingsService.ensure_admin(user)
+    return _templates().TemplateResponse(
+        "reports.html",
+        {"request": request, "user": user, "settings": settings, "active_page": "reports"},
+    )
+
+
+@router.get("/api/reports/summary")
+def reports_summary(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    export: Optional[str] = None,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_auth),
+    tenant_id: int = Depends(get_tenant),
+):
+    SettingsService.ensure_admin(user)
+
+    end_dt = _parse_date(end_date) or date.today()
+    start_dt = _parse_date(start_date) or (end_dt - timedelta(days=29))
+    start_ts = datetime.combine(start_dt, datetime.min.time())
+    end_ts = datetime.combine(end_dt + timedelta(days=1), datetime.min.time())
+
+    sales_rows = session.exec(
+        select(
+            func.date(Sale.timestamp).label("day"),
+            func.sum(Sale.total_amount).label("total"),
+        )
+        .where(Sale.tenant_id == tenant_id, Sale.timestamp >= start_ts, Sale.timestamp < end_ts)
+        .group_by(func.date(Sale.timestamp))
+        .order_by(func.date(Sale.timestamp))
+    ).all()
+    sales_by_day = [{"day": str(r.day), "total": float(r.total or 0)} for r in sales_rows]
+
+    top_rows = session.exec(
+        select(
+            SaleItem.product_name.label("product_name"),
+            func.sum(SaleItem.quantity).label("units"),
+            func.sum(SaleItem.total).label("amount"),
+        )
+        .join(Sale, Sale.id == SaleItem.sale_id)
+        .where(Sale.tenant_id == tenant_id, Sale.timestamp >= start_ts, Sale.timestamp < end_ts)
+        .group_by(SaleItem.product_name)
+        .order_by(func.sum(SaleItem.total).desc())
+        .limit(10)
+    ).all()
+    top_products = [
+        {
+            "product_name": r.product_name,
+            "units": int(r.units or 0),
+            "amount": float(r.amount or 0),
+        }
+        for r in top_rows
+    ]
+
+    cash_rows = session.exec(
+        select(
+            func.date(CashMovement.timestamp).label("day"),
+            func.sum(case((CashMovement.movement_type == "in", CashMovement.amount), else_=0)).label("ingresos"),
+            func.sum(case((CashMovement.movement_type == "out", CashMovement.amount), else_=0)).label("egresos"),
+        )
+        .where(CashMovement.tenant_id == tenant_id, CashMovement.timestamp >= start_ts, CashMovement.timestamp < end_ts)
+        .group_by(func.date(CashMovement.timestamp))
+        .order_by(func.date(CashMovement.timestamp))
+    ).all()
+    cash_by_day = []
+    for r in cash_rows:
+        ingresos = float(r.ingresos or 0)
+        egresos = float(abs(r.egresos or 0))
+        cash_by_day.append(
+            {"day": str(r.day), "ingresos": ingresos, "egresos": egresos, "balance": ingresos - egresos}
+        )
+
+    # Client balances
+    client_sales = session.exec(
+        select(Sale.client_id, func.sum(Sale.total_amount).label("total"))
+        .where(Sale.tenant_id == tenant_id)
+        .group_by(Sale.client_id)
+    ).all()
+    client_sales_map = {row.client_id: float(row.total or 0) for row in client_sales if row.client_id}
+    client_payments = session.exec(
+        select(Payment.client_id, func.sum(Payment.amount).label("total"))
+        .where(Payment.tenant_id == tenant_id)
+        .group_by(Payment.client_id)
+    ).all()
+    client_pay_map = {row.client_id: float(row.total or 0) for row in client_payments if row.client_id}
+    clients = session.exec(select(Client).where(Client.tenant_id == tenant_id)).all()
+    client_balances = []
+    for client in clients:
+        sales_total = client_sales_map.get(client.id, 0.0)
+        paid_total = client_pay_map.get(client.id, 0.0)
+        balance = float(sales_total - paid_total)
+        client_balances.append({"name": client.name, "balance": balance})
+
+    suppliers = session.exec(select(Supplier).where(Supplier.tenant_id == tenant_id)).all()
+    supplier_balances = []
+    for s in suppliers:
+        try:
+            balance = PurchaseService.get_supplier_balance(session, tenant_id, s.id)
+        except Exception:
+            # Backward compatibility for tenants with legacy cash_movement schema.
+            balance = 0.0
+        supplier_balances.append({"name": s.name, "balance": balance})
+
+    if export and export.lower() == "xlsx":
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            pd.DataFrame(sales_by_day).to_excel(writer, index=False, sheet_name="ventas_diarias")
+            pd.DataFrame(top_products).to_excel(writer, index=False, sheet_name="top_productos")
+            pd.DataFrame(cash_by_day).to_excel(writer, index=False, sheet_name="caja")
+            pd.DataFrame(client_balances).to_excel(writer, index=False, sheet_name="clientes")
+            pd.DataFrame(supplier_balances).to_excel(writer, index=False, sheet_name="proveedores")
+        output.seek(0)
+        filename = f"reporte_{start_dt.isoformat()}_{end_dt.isoformat()}.xlsx"
+        return StreamingResponse(
+            output,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    return {
+        "range": {"start": start_dt.isoformat(), "end": end_dt.isoformat()},
+        "sales_by_day": sales_by_day,
+        "top_products": top_products,
+        "cash_by_day": cash_by_day,
+        "client_balances": client_balances,
+        "supplier_balances": supplier_balances,
+    }
+
+
+@router.post("/api/ai/chat")
+def ai_chat(
+    payload: dict,
+    session: Session = Depends(get_session),
+    user: User = Depends(require_auth),
+    tenant_id: int = Depends(get_tenant),
+):
+    question = (payload.get("question") or "").strip()
+    if not question:
+        raise HTTPException(400, "Pregunta vacía")
+
+    cred = session.exec(select(AICredential).where(AICredential.tenant_id == tenant_id)).first()
+    if not cred or not cred.api_key:
+        raise HTTPException(400, "Configura tu API key de Gemini en Configuración > IA")
+
+    # Contexto breve: ventas últimas 7 días, top 3 productos, caja hoy
+    today = date.today()
+    start_dt = today - timedelta(days=6)
+    summary = reports_summary(
+        start_date=start_dt.isoformat(),
+        end_date=today.isoformat(),
+        export=None,
+        session=session,
+        user=user,
+        tenant_id=tenant_id,
+    )
+
+    system_prompt = (
+        SUPPORT_CONSTITUTION
+    )
+    context = {
+        "empresa": session.exec(select(Settings).where(Settings.tenant_id == tenant_id)).first().company_name,
+        "usuario": user.username,
+        "rol": user.role,
+        "kpis": summary,
+    }
+
+    try:
+        res = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={cred.api_key}",
+            json={
+                "contents": [
+                    {"role": "user", "parts": [{"text": system_prompt}]},
+                    {"role": "user", "parts": [{"text": f"Contexto: {json.dumps(context)}"}]},
+                    {"role": "user", "parts": [{"text": question}]},
+                ]
+            },
+            timeout=10,
+        )
+        if res.status_code == 404:
+            raise HTTPException(400, "Revisa el modelo o la API key de Gemini (404). Usa gemini-2.0-flash-exp.")
+        res.raise_for_status()
+        data = res.json()
+        text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        return {"answer": text.strip() or "No obtuve respuesta del modelo."}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"No se pudo obtener respuesta: {exc}")
+
+
+# --- Tenants (Superadmin only) ---
+
+@router.get("/tenants", response_class=HTMLResponse)
+def list_tenants(
+    request: Request,
+    user: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    tenants = session.exec(select(Tenant)).all()
+    users = session.exec(select(User)).all()
+    user_counts = {}
+    for u in users:
+        user_counts[u.tenant_id] = user_counts.get(u.tenant_id, 0) + 1
+    settings = SettingsService.get_or_create_settings(session, tenant_id=user.tenant_id)
+    return _templates().TemplateResponse(
+        "tenants.html",
+        {
+            "request": request,
+            "user": user,
+            "tenants": tenants,
+            "user_counts": user_counts,
+            "settings": settings,
+            "active_page": "tenants",
+        },
+    )
+
+
+@router.post("/api/tenants")
+def create_tenant(
+    name: str = Form(...),
+    subdomain: Optional[str] = Form(None),
+    admin_username: str = Form(...),
+    admin_password: str = Form(...),
+    admin_full_name: Optional[str] = Form(None),
+    session: Session = Depends(get_session),
+    user: User = Depends(require_superadmin),
+):
+    sub = (subdomain or "").strip().lower() or None
+    if sub:
+        existing = session.exec(select(Tenant).where(Tenant.subdomain == sub)).first()
+        if existing:
+            raise HTTPException(400, "Subdomain already in use")
+
+    tenant = Tenant(name=name.strip(), subdomain=sub)
+    session.add(tenant)
+    session.commit()
+    session.refresh(tenant)
+
+    settings = Settings(tenant_id=tenant.id, company_name=name.strip(), logo_url="/static/images/logo.png")
+    session.add(settings)
+
+    hashed = AuthService.get_password_hash(admin_password)
+    new_admin = User(
+        username=admin_username.strip(),
+        password_hash=hashed,
+        role="admin",
+        full_name=admin_full_name or f"Admin {name}",
+        tenant_id=tenant.id,
+    )
+    session.add(new_admin)
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        session.delete(tenant)
+        session.commit()
+        raise HTTPException(400, "Failed to create tenant/admin (username or subdomain conflict)")
+
+    return {"status": "success", "tenant_id": tenant.id}
 
 
 @router.get("/api/admin/backup")
