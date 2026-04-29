@@ -39,10 +39,50 @@ logger = logging.getLogger(__name__)
 stock_service = StockService(static_dir="static/barcodes")
 templates = CompatTemplates(directory="templates")
 
+
+def ensure_schema_compatibility(session: Session):
+    from sqlmodel import text
+    stmts = [
+        # WMS
+        "ALTER TABLE location ADD COLUMN IF NOT EXISTS tenant_id INTEGER",
+        "ALTER TABLE location ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE location ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
+        "ALTER TABLE bin ADD COLUMN IF NOT EXISTS tenant_id INTEGER",
+        "ALTER TABLE bin ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE bin ADD COLUMN IF NOT EXISTS max_capacity INTEGER",
+        "ALTER TABLE binstock ADD COLUMN IF NOT EXISTS tenant_id INTEGER",
+        "ALTER TABLE binstock ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+        "ALTER TABLE stockmovement ADD COLUMN IF NOT EXISTS tenant_id INTEGER",
+        "ALTER TABLE stockmovement ADD COLUMN IF NOT EXISTS request_id VARCHAR",
+        "ALTER TABLE stockmovement ADD COLUMN IF NOT EXISTS user_id INTEGER",
+        # Cash & Reports
+        "ALTER TABLE cashmovement ADD COLUMN IF NOT EXISTS reference_id INTEGER",
+        "ALTER TABLE cashmovement ADD COLUMN IF NOT EXISTS reference_type VARCHAR",
+        "ALTER TABLE cashmovement ADD COLUMN IF NOT EXISTS user_id INTEGER",
+        # Products & Clients (Compatibility)
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS price_bulk FLOAT",
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS price_retail FLOAT",
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS cant_bulto INTEGER",
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS numeracion VARCHAR",
+        "ALTER TABLE product ADD COLUMN IF NOT EXISTS curve_quantity INTEGER DEFAULT 1",
+        "ALTER TABLE client ADD COLUMN IF NOT EXISTS razon_social VARCHAR",
+        "ALTER TABLE client ADD COLUMN IF NOT EXISTS cuit VARCHAR",
+        "ALTER TABLE client ADD COLUMN IF NOT EXISTS iva_category VARCHAR",
+        "ALTER TABLE client ADD COLUMN IF NOT EXISTS transport_name VARCHAR",
+        "ALTER TABLE client ADD COLUMN IF NOT EXISTS transport_address VARCHAR",
+    ]
+    for stmt in stmts:
+        try:
+            session.exec(text(stmt))
+            session.commit()
+        except Exception:
+            session.rollback()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     with Session(engine) as session:
+        ensure_schema_compatibility(session)
         try:
             AuthService.create_default_user_and_settings(session)
         except Exception as e:
@@ -52,6 +92,7 @@ async def lifespan(app: FastAPI):
         if os.getenv("SEED_ON_START") == "1":
             seed_products(session)
     yield
+
 
 app = FastAPI(title="NexPos System", lifespan=lifespan)
 
