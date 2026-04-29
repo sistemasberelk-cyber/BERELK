@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlmodel import Session, select, func
+from sqlmodel import Session, select, func, text
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -15,6 +15,33 @@ from services.bin_stock_service import BinStockService, StockServiceError
 
 router = APIRouter(prefix="/wms", tags=["WMS"])
 templates = Jinja2Templates(directory="templates")
+_wms_schema_checked = False
+
+
+def _ensure_wms_schema_compat(session: Session):
+    """
+    Compatibilidad para instalaciones viejas:
+    CREATE TABLE no agrega columnas nuevas en tablas ya existentes.
+    Esto evita 500 en páginas WMS si faltan columnas agregadas luego.
+    """
+    global _wms_schema_checked
+    if _wms_schema_checked:
+        return
+
+    stmts = [
+        "ALTER TABLE location ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE location ADD COLUMN IF NOT EXISTS created_at TIMESTAMP",
+        "ALTER TABLE bin ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE",
+        "ALTER TABLE bin ADD COLUMN IF NOT EXISTS max_capacity INTEGER",
+        "ALTER TABLE stockmovement ADD COLUMN IF NOT EXISTS request_id VARCHAR",
+        "ALTER TABLE stockmovement ADD COLUMN IF NOT EXISTS user_id INTEGER",
+        "ALTER TABLE binstock ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP",
+    ]
+    for stmt in stmts:
+        session.exec(text(stmt))
+    session.commit()
+    _wms_schema_checked = True
+
 
 
 def _svc_error(e: StockServiceError):
@@ -33,6 +60,7 @@ def list_locations(
     tenant_id: int = Depends(get_tenant)
 ):
     """Lista todos los depósitos activos del tenant."""
+    _ensure_wms_schema_compat(session)
     locations = session.exec(
         select(Location)
         .where(Location.tenant_id == tenant_id, Location.is_active == True)
@@ -52,6 +80,7 @@ def create_location(
     tenant_id: int = Depends(get_tenant)
 ):
     """Crea un nuevo depósito."""
+    _ensure_wms_schema_compat(session)
     # Validar código único si se provee
     if code:
         existing = session.exec(
@@ -85,6 +114,7 @@ def update_location(
     user: User = Depends(require_auth),
     tenant_id: int = Depends(get_tenant)
 ):
+    _ensure_wms_schema_compat(session)
     loc = session.get(Location, location_id)
     if not loc or loc.tenant_id != tenant_id:
         raise HTTPException(404, "Depósito no encontrado")
@@ -105,6 +135,7 @@ def delete_location(
     user: User = Depends(require_auth),
     tenant_id: int = Depends(get_tenant)
 ):
+    _ensure_wms_schema_compat(session)
     loc = session.get(Location, location_id)
     if not loc or loc.tenant_id != tenant_id:
         raise HTTPException(404, "Depósito no encontrado")
@@ -127,6 +158,7 @@ def list_bins(
     tenant_id: int = Depends(get_tenant)
 ):
     """Lista todas las ubicaciones de un depósito."""
+    _ensure_wms_schema_compat(session)
     loc = session.get(Location, location_id)
     if not loc or loc.tenant_id != tenant_id:
         raise HTTPException(404, "Depósito no encontrado")
@@ -153,6 +185,7 @@ def create_bin(
     tenant_id: int = Depends(get_tenant)
 ):
     """Crea una nueva ubicación dentro de un depósito."""
+    _ensure_wms_schema_compat(session)
     loc = session.get(Location, location_id)
     if not loc or loc.tenant_id != tenant_id:
         raise HTTPException(404, "Depósito no encontrado")
@@ -191,6 +224,7 @@ def delete_bin(
     user: User = Depends(require_auth),
     tenant_id: int = Depends(get_tenant)
 ):
+    _ensure_wms_schema_compat(session)
     bin_ = session.get(Bin, bin_id)
     if not bin_ or bin_.tenant_id != tenant_id:
         raise HTTPException(404, "Ubicación no encontrada")
@@ -212,6 +246,7 @@ def get_bin_stock(
     tenant_id: int = Depends(get_tenant)
 ):
     """Stock detallado de una ubicación específica."""
+    _ensure_wms_schema_compat(session)
     bin_ = session.get(Bin, bin_id)
     if not bin_ or bin_.tenant_id != tenant_id:
         raise HTTPException(404, "Ubicación no encontrada")
@@ -251,6 +286,7 @@ def adjust_bin_stock(
     user: User = Depends(require_auth),
     tenant_id: int = Depends(get_tenant)
 ):
+    _ensure_wms_schema_compat(session)
     try:
         return BinStockService.adjust_stock(
             session, tenant_id, bin_id, body.product_id,
@@ -276,6 +312,7 @@ def transfer_stock(
     user: User = Depends(require_auth),
     tenant_id: int = Depends(get_tenant)
 ):
+    _ensure_wms_schema_compat(session)
     try:
         return BinStockService.transfer_stock(
             session, tenant_id, body.product_id,
@@ -299,6 +336,7 @@ def get_product_locations(
     tenant_id: int = Depends(get_tenant)
 ):
     """¿Dónde está este producto en el depósito?"""
+    _ensure_wms_schema_compat(session)
     product = session.get(Product, product_id)
     if not product or product.tenant_id != tenant_id:
         raise HTTPException(404, "Producto no encontrado")
@@ -332,6 +370,7 @@ def get_stock_map(
     tenant_id: int = Depends(get_tenant)
 ):
     """Mapa completo de stock por ubicación. Paginado para evitar payloads enormes."""
+    _ensure_wms_schema_compat(session)
     query = (
         select(BinStock, Bin, Location, Product)
         .join(Bin, BinStock.bin_id == Bin.id)
@@ -388,6 +427,7 @@ def wms_page(
     session: Session = Depends(get_session)
 ):
     """Página principal de gestión de depósitos."""
+    _ensure_wms_schema_compat(session)
     locations = session.exec(
         select(Location)
         .where(Location.tenant_id == tenant_id)
@@ -430,6 +470,7 @@ def wms_location_detail(
     session: Session = Depends(get_session)
 ):
     """Detalle de un depósito: todas sus ubicaciones y stock."""
+    _ensure_wms_schema_compat(session)
     loc = session.get(Location, location_id)
     if not loc or loc.tenant_id != tenant_id:
         raise HTTPException(404, "Depósito no encontrado")
@@ -476,6 +517,7 @@ def wms_stock_map_ui(
     session: Session = Depends(get_session)
 ):
     """Página del mapa de stock completo."""
+    _ensure_wms_schema_compat(session)
     map_data = get_stock_map(location_id, page, page_size, session, user, tenant_id)
     locations = list_locations(session, user, tenant_id)
     
@@ -501,6 +543,7 @@ def wms_transfers_ui(
     session: Session = Depends(get_session)
 ):
     """Página de transferencias de stock."""
+    _ensure_wms_schema_compat(session)
     # Productos con stock
     products = session.exec(
         select(Product).where(Product.tenant_id == tenant_id, Product.stock_quantity > 0).order_by(Product.name)
@@ -563,6 +606,7 @@ def trigger_backfill(
     tenant_id: int = Depends(get_tenant)
 ):
     """Crea depósito y ubicación por defecto, y les asigna el stock global actual."""
+    _ensure_wms_schema_compat(session)
     if user.role not in ["admin", "superadmin"]:
         raise HTTPException(403, "Se requiere rol admin")
     try:
@@ -579,6 +623,7 @@ def run_reconciliation(
     tenant_id: int = Depends(get_tenant)
 ):
     """Ejecuta reconciliación de product.stock_quantity vs bin_stock."""
+    _ensure_wms_schema_compat(session)
     if user.role not in ["admin", "superadmin"]:
         raise HTTPException(403, "Se requiere rol admin")
     try:
