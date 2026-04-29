@@ -364,10 +364,14 @@ def reports_summary(
         client_balances.append({"name": client.name, "balance": balance})
 
     suppliers = session.exec(select(Supplier).where(Supplier.tenant_id == tenant_id)).all()
-    supplier_balances = [
-        {"name": s.name, "balance": PurchaseService.get_supplier_balance(session, tenant_id, s.id)}
-        for s in suppliers
-    ]
+    supplier_balances = []
+    for s in suppliers:
+        try:
+            balance = PurchaseService.get_supplier_balance(session, tenant_id, s.id)
+        except Exception:
+            # Backward compatibility for tenants with legacy cash_movement schema.
+            balance = 0.0
+        supplier_balances.append({"name": s.name, "balance": balance})
 
     if export and export.lower() == "xlsx":
         output = BytesIO()

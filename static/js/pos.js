@@ -244,21 +244,23 @@ function checkout() {
     if (cart.length === 0) return alert('El carrito esta vacio');
 
     const clientSelect = document.getElementById('client-select');
-    const clientId = clientSelect ? clientSelect.value : null;
-    const clientName = clientSelect ? clientSelect.options[clientSelect.selectedIndex].text : 'Casual';
+    const clientName = clientSelect && clientSelect.value ? clientSelect.options[clientSelect.selectedIndex].text : 'Casual';
     const total = cart.reduce((acc, item) => acc + (item.unit_price * item.quantity), 0);
 
     document.getElementById('modal-total-display').textContent = '$' + total.toFixed(2);
     document.getElementById('modal-client-display').textContent = clientName;
     
-    // Reset fields
     document.getElementById('pay-cash').value = total.toFixed(2);
     document.getElementById('pay-transfer').value = 0;
     document.getElementById('pay-account').value = 0;
     
-    // Show/Hide account row
-    document.getElementById('account-row').style.display = clientId ? 'flex' : 'none';
+    const isCasual = !clientSelect || !clientSelect.value;
+    document.getElementById('account-row').style.display = isCasual ? 'none' : 'flex';
+    if (isCasual) {
+        document.getElementById('pay-account').value = 0;
+    }
     
+    document.getElementById('whatsapp-container').style.display = 'none';
     calculateRemaining();
     
     document.getElementById('payment-modal').style.display = 'flex';
@@ -268,33 +270,28 @@ function checkout() {
 
 function calculateRemaining() {
     const totalText = document.getElementById('modal-total-display').innerText.replace('$', '');
-    const total = parseFloat(totalText);
+    const total = parseFloat(totalText) || 0;
     
     const cash = parseFloat(document.getElementById('pay-cash').value) || 0;
     const transfer = parseFloat(document.getElementById('pay-transfer').value) || 0;
     
-    const totalPaid = cash + transfer;
-    const remaining = total - totalPaid;
-    
-    document.getElementById('total-paid-display').textContent = '$' + totalPaid.toFixed(2);
-    
     const clientSelect = document.getElementById('client-select');
-    const clientId = clientSelect ? clientSelect.value : null;
-
-    if (remaining > 0) {
-        if (clientId) {
-            document.getElementById('pay-account').value = remaining.toFixed(2);
-            document.getElementById('change-display').style.display = 'none';
-        } else {
-            document.getElementById('pay-account').value = 0;
-            document.getElementById('change-display').style.display = 'none';
-        }
-    } else if (remaining < 0) {
-        document.getElementById('pay-account').value = 0;
+    const isCasual = !clientSelect || !clientSelect.value;
+    
+    const amountPaid = cash + transfer;
+    const remaining = total - amountPaid;
+    
+    document.getElementById('total-paid-display').innerText = '$' + amountPaid.toFixed(2);
+    
+    if (remaining < 0) {
+        if (!isCasual) document.getElementById('pay-account').value = 0;
         document.getElementById('change-display').style.display = 'flex';
-        document.getElementById('change-amount').textContent = '$' + Math.abs(remaining).toFixed(2);
+        document.getElementById('change-amount').innerText = '$' + Math.abs(remaining).toFixed(2);
+    } else if (remaining > 0 && !isCasual) {
+        document.getElementById('pay-account').value = remaining.toFixed(2);
+        document.getElementById('change-display').style.display = 'none';
     } else {
-        document.getElementById('pay-account').value = 0;
+        if (!isCasual) document.getElementById('pay-account').value = 0;
         document.getElementById('change-display').style.display = 'none';
     }
 }
@@ -340,10 +337,8 @@ async function confirmCheckout() {
         if (res.ok) {
             const sale = await res.json();
             
-            // Handle WhatsApp button
             if (clientId && account > 0) {
                 document.getElementById('whatsapp-container').style.display = 'block';
-                // Store sale info for whatsapp
                 window.lastSale = {
                     id: sale.id,
                     total: cart.reduce((acc, item) => acc + (item.unit_price * item.quantity), 0),
@@ -405,14 +400,13 @@ function shareWhatsApp() {
         return Swal.fire('Error', 'El cliente no tiene un numero de WhatsApp registrado', 'error');
     }
     
-    let phone = client.phone.replace(/\D/g, '');
-    // Ensure international format (assuming Argentina +54 if no 54 prefix)
+    let phone = client.phone.replace(/\\D/g, '');
     if (!phone.startsWith('54')) phone = '54' + phone;
     
-    const message = `Hola ${client.name}! Te comparto el detalle de tu compra:\n\n` +
-        `Total: $${sale.total.toFixed(2)}\n` +
-        `Pagado: $${sale.paid.toFixed(2)}\n` +
-        `Saldo a cuenta: $${sale.debt.toFixed(2)}\n\n` +
+    const message = `Hola ${client.name}! Te comparto el detalle de tu compra:\\n\\n` +
+        `Total: $${sale.total.toFixed(2)}\\n` +
+        `Pagado: $${sale.paid.toFixed(2)}\\n` +
+        `Saldo a cuenta: $${sale.debt.toFixed(2)}\\n\\n` +
         `Muchas gracias!`;
         
     const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
@@ -422,9 +416,6 @@ function shareWhatsApp() {
     resetAfterSale();
 }
 
-function handlePaymentMethodChange() {
-    // This is now handled by calculateRemaining and individual inputs
-}
 
 async function quickEditProduct(productId) {
     const product = allProducts.find(p => p.id === productId);

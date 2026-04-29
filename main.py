@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, status, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+# from fastapi.templating import Jinja2Templates
+from web.compat_templates import CompatTemplates
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select, func, text, delete
 from pydantic import BaseModel
@@ -13,6 +15,8 @@ import io
 import shutil
 import uuid
 import json
+import logging
+import re
 
 import pandas as pd
 
@@ -23,10 +27,13 @@ from services.stock_service import StockService
 from services.auth_service import AuthService
 from routers.admin import router as admin_router
 from routers.picking import router as picking_router
+from routers.wms import router as wms_router
 from web.dependencies import get_current_user, get_settings, get_tenant, require_auth
 from web.compat_templates import CompatTemplates
 import barcode
 from barcode.writer import ImageWriter
+
+logger = logging.getLogger(__name__)
 
 # Setup
 stock_service = StockService(static_dir="static/barcodes")
@@ -69,10 +76,10 @@ def health_check():
     return {"status": "ok"}
 
 
-# Mount Static Files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(admin_router)
 app.include_router(picking_router)
+app.include_router(wms_router)
 
 # --- Auth Routes ---
 
@@ -84,7 +91,6 @@ COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN")
 app.add_middleware(
     SessionMiddleware,
     secret_key=SESSION_SECRET,
-    domain=COOKIE_DOMAIN or None,
     same_site="lax",
 )
 
@@ -1508,6 +1514,10 @@ def print_labels_v2(
     session: Session = Depends(get_session),
     tenant_id: int = Depends(get_tenant)
 ):
+    allowed_layout_types = {"exhibition", "list", "100x50", "90x60", "100x60", "100x65"}
+    if layout_type not in allowed_layout_types:
+        raise HTTPException(400, "Invalid layout type")
+
     # Manual conversion because checkbox default handling can be tricky
     should_hide_price = False
     if hide_price and str(hide_price).lower() in ["true", "on", "1", "yes"]:
@@ -1515,12 +1525,50 @@ def print_labels_v2(
 
     import json
     from sqlmodel import col
+    if len(selected_items) > 20_000:
+        raise HTTPException(400, "Selection payload is too large")
+
     try:
         item_ids = json.loads(selected_items)
-    except:
-        raise HTTPException(400, "Invalid JSON selection")
-        
-    products = session.exec(select(Product).where(col(Product.id).in_(item_ids), Product.tenant_id == tenant_id)).all()
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(400, "Invalid JSON selection") from exc
+
+    if not isinstance(item_ids, list):
+        raise HTTPException(400, "Selection must be a JSON array")
+
+    validated_item_ids = []
+    for item_id in item_ids:
+        try:
+            numeric_id = int(item_id)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(400, "Selection must only contain numeric ids") from exc
+        if numeric_id <= 0:
+            raise HTTPException(400, "Selection must only contain positive ids")
+        validated_item_ids.append(numeric_id)
+
+    if not validated_item_ids:
+        raise HTTPException(400, "No products were selected")
+
+    # Defensive constraints to keep request cost bounded and deterministic.
+    deduplicated_item_ids = list(dict.fromkeys(validated_item_ids))
+    max_items_per_request = 500
+    if len(deduplicated_item_ids) > max_items_per_request:
+        raise HTTPException(400, f"Selection exceeds max allowed items ({max_items_per_request})")
+
+    products = session.exec(
+        select(Product).where(
+            col(Product.id).in_(deduplicated_item_ids),
+            Product.tenant_id == tenant_id,
+        )
+    ).all()
+
+    found_ids = {product.id for product in products}
+    missing_ids = [item_id for item_id in deduplicated_item_ids if item_id not in found_ids]
+    if missing_ids:
+        raise HTTPException(404, f"Products not found for ids: {', '.join(map(str, missing_ids[:10]))}")
+
+    if not products:
+        raise HTTPException(404, "No products found for selected ids")
     
     # Prepare data for template
     labels_data = []
@@ -1535,27 +1583,38 @@ def print_labels_v2(
     
     for p in products:
         # Generate Barcode Image if not exists
-        bc_filename = f"{p.barcode}" # without extension for now, writer adds it
+        barcode_value = str(p.barcode or "").strip()
+        if not barcode_value:
+            logger.warning("Skipping barcode generation for product id=%s due to empty barcode", p.id)
+            continue
+
+        bc_filename = re.sub(r"[^A-Za-z0-9._-]", "_", barcode_value).strip("._-")
+        if not bc_filename:
+            logger.warning("Skipping barcode generation for product id=%s due to invalid barcode value", p.id)
+            continue
         full_path = f"{static_bc_path}/{bc_filename}"
         
         # Check if file exists (Code128 writer adds .png)
         if not os.path.exists(full_path + ".png"):
             try:
                 # Generate
-                my_code = Code128(p.barcode, writer=ImageWriter())
+                my_code = Code128(barcode_value, writer=ImageWriter())
                 my_code.save(full_path)
             except Exception as e:
-                print(f"Error generating barcode for {p.name}: {e}")
+                logger.exception("Error generating barcode for product id=%s name=%s", p.id, p.name)
                 
         labels_data.append({
             "name": p.name,
             "price": p.price_retail if p.price_retail else p.price, # Use Retail price if set
-            "barcode": p.barcode,
-            "barcode_file": f"{p.barcode}.png",
+            "barcode": barcode_value,
+            "barcode_file": f"{bc_filename}.png",
             "category": p.category,
             "description": p.description,
             "item_number": p.item_number
         })
+
+    if not labels_data:
+        raise HTTPException(422, "No valid labels could be generated")
         
     if layout_type == "exhibition":
         # 100x65mm (approx) - Exhibition cards
