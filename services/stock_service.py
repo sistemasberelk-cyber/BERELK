@@ -151,13 +151,13 @@ class StockService:
                 session.add(CashMovement(
                     tenant_id=tenant_id, user_id=user_id, amount=amt_cash,
                     movement_type="in", concept=f"Ingreso por Venta a {client_name} - Medio: Efectivo",
-                    reference_type="sale"
+                    reference_type="sale", reference_id=sale.id
                 ))
             if amt_transfer > 0:
                 session.add(CashMovement(
                     tenant_id=tenant_id, user_id=user_id, amount=amt_transfer,
                     movement_type="in", concept=f"Ingreso por Venta a {client_name} - Medio: Transferencia",
-                    reference_type="sale"
+                    reference_type="sale", reference_id=sale.id
                 ))
 
         session.commit()

@@ -626,6 +626,10 @@ def get_cash_flow_report(
             total_out += abs(amt)
 
     from database.models import Sale
+    # Avoid double counting: Only sum sales that DO NOT have an explicit CashMovement
+    # with reference_type='sale' and reference_id = Sale.id
+    movement_sale_ids = {m.reference_id for m in movements if m.reference_type == "sale" and m.reference_id}
+    
     sales = session.exec(
         select(Sale).where(
             Sale.tenant_id == tenant_id,
@@ -636,6 +640,9 @@ def get_cash_flow_report(
     ).all()
 
     for s in sales:
+        if s.id in movement_sale_ids:
+            continue  # Already counted via CashMovement
+            
         total_in_cash += (s.amount_cash or 0.0)
         total_in_transfer += (s.amount_transfer or 0.0)
         # Fallback for old sales without split fields
@@ -1155,42 +1162,49 @@ def get_cash_book(
         .order_by(CashMovement.timestamp.desc())
     ).all()
 
-    total_in = (
-        session.exec(
-            select(func.sum(CashMovement.amount)).where(
-                CashMovement.tenant_id == tenant_id,
-                CashMovement.timestamp >= day_start,
-                CashMovement.timestamp < day_end,
-                CashMovement.movement_type == "in",
-            )
-        ).one()
-        or 0.0
-    )
-    total_out = (
-        session.exec(
-            select(func.sum(CashMovement.amount)).where(
-                CashMovement.tenant_id == tenant_id,
-                CashMovement.timestamp >= day_start,
-                CashMovement.timestamp < day_end,
-                CashMovement.movement_type == "out",
-            )
-        ).one()
-        or 0.0
-    )
+    total_in_cash = 0.0
+    total_in_transfer = 0.0
+    total_out = 0.0
+    
+    for m in movements:
+        amt = m.amount or 0.0
+        if amt > 0:
+            if m.movement_type == "in":
+                if m.concept and ("transferencia" in m.concept.lower() or "transfer" in m.concept.lower()):
+                    total_in_transfer += amt
+                else:
+                    total_in_cash += amt
+            else:
+                total_out += abs(amt)
+        else:
+            total_out += abs(amt)
 
-    paid_sales_in = (
-        session.exec(
-            select(func.sum(Sale.amount_paid)).where(
-                Sale.tenant_id == tenant_id,
-                Sale.timestamp >= day_start,
-                Sale.timestamp < day_end,
-                Sale.amount_paid > 0,
-            )
-        ).one()
-        or 0.0
-    )
-    total_in = float(total_in or 0.0) + float(paid_sales_in or 0.0)
-    balance = float(total_in + total_out)  # Out is negative
+    # Avoid double counting: Only sum sales that DO NOT have an explicit CashMovement
+    movement_sale_ids = {m.reference_id for m in movements if m.reference_type == "sale" and m.reference_id}
+    
+    sales = session.exec(
+        select(Sale).where(
+            Sale.tenant_id == tenant_id,
+            Sale.timestamp >= day_start,
+            Sale.timestamp < day_end,
+            Sale.amount_paid > 0
+        )
+    ).all()
+
+    for s in sales:
+        if s.id in movement_sale_ids:
+            continue
+            
+        total_in_cash += (s.amount_cash or 0.0)
+        total_in_transfer += (s.amount_transfer or 0.0)
+        if s.amount_cash == 0 and s.amount_transfer == 0 and s.amount_paid > 0:
+            if s.payment_method == "transfer":
+                total_in_transfer += s.amount_paid
+            else:
+                total_in_cash += s.amount_paid
+
+    total_in = total_in_cash + total_in_transfer
+    balance = total_in - total_out
 
     return templates.TemplateResponse(
         "cash_book.html",
