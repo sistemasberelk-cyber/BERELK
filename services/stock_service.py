@@ -1,7 +1,7 @@
 import barcode
 from barcode.writer import ImageWriter
 from sqlmodel import Session, select
-from database.models import Product, Sale, SaleItem, User, Payment
+from database.models import Product, Sale, SaleItem, User, Payment, CashMovement
 from typing import List, Optional
 import os
 from datetime import datetime
@@ -107,6 +107,22 @@ class StockService:
         sale.amount_paid = final_amount_paid
         
         session.add(sale)
+        session.flush()
+
+        # Register cash movement for immediate cash inflows
+        # (only when there is an actual payment in this sale).
+        if final_amount_paid > 0:
+            session.add(
+                CashMovement(
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    amount=abs(final_amount_paid),
+                    movement_type="in",
+                    concept=f"Venta #{sale.id or 'N/A'}",
+                    reference_id=sale.id,
+                    reference_type="sale",
+                )
+            )
         
         # Handle Payment if Client is selected
         if client_id and final_amount_paid > 0:
