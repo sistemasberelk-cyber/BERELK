@@ -209,7 +209,13 @@ def get_pos(request: Request, user: User = Depends(require_auth), settings: Sett
 @app.head("/products")
 def get_products_page(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), tenant_id: int = Depends(get_tenant), session: Session = Depends(get_session)):
     products = session.exec(select(Product).where(Product.tenant_id == tenant_id)).all()
-    return templates.TemplateResponse("products.html", {"request": request, "active_page": "products", "settings": settings, "user": user, "products": products})
+    low_stock_products = session.exec(
+        select(Product).where(
+            Product.tenant_id == tenant_id,
+            Product.stock_quantity < Product.min_stock_level,
+        )
+    ).all()
+    return templates.TemplateResponse("products.html", {"request": request, "active_page": "products", "settings": settings, "user": user, "products": products, "low_stock_products": low_stock_products})
 
 @app.get("/products/labels-100x60", response_class=HTMLResponse)
 def print_labels_100x60(request: Request, user: User = Depends(require_auth), settings: Settings = Depends(get_settings), tenant_id: int = Depends(get_tenant), session: Session = Depends(get_session)):
@@ -700,8 +706,9 @@ def get_cash_flow_report(
     
     for m in effective_movements:
         amt = m.amount or 0.0
+        concept_lc = (m.concept or "").lower()
         if amt > 0:
-            if "transferencia" in m.concept.lower() or "transfer" in m.concept.lower():
+            if "transferencia" in concept_lc or "transfer" in concept_lc:
                 total_in_transfer += amt
             else:
                 total_in_cash += amt
