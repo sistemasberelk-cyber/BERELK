@@ -673,9 +673,14 @@ def get_cash_flow_report(
 ):
     if not date_filter:
         date_filter = date.today().strftime("%Y-%m-%d")
+    try:
+        target_day = datetime.strptime(date_filter, "%Y-%m-%d")
+    except ValueError:
+        target_day = datetime.combine(date.today(), datetime.min.time())
+        date_filter = target_day.strftime("%Y-%m-%d")
 
-    target_date_start = datetime.strptime(date_filter, "%Y-%m-%d").replace(hour=0, minute=0, second=0)
-    target_date_end = datetime.strptime(date_filter, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
+    target_date_start = target_day.replace(hour=0, minute=0, second=0)
+    target_date_end = target_day.replace(hour=23, minute=59, second=59)
 
     from database.models import CashMovement
     stmt = (
@@ -813,7 +818,9 @@ async def import_products_excel(
     user: User = Depends(require_auth)
 ):
     if user.role != "admin": raise HTTPException(403)
-    
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="Archivo inválido")
+
     ext = file.filename.split(".")[-1].lower()
     contents = await file.read()
     
