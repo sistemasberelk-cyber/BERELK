@@ -316,10 +316,15 @@ def get_client_account(id: int, request: Request, user: User = Depends(require_a
             "type": "payment"
         })
         
-    # Sort by date descending (defensive against null / naive-aware mix).
+    # Sort by date descending (defensive against null / naive-aware / date-datetime mix).
     def _sort_date(dt_value):
         if dt_value is None:
             return datetime.min.replace(tzinfo=timezone.utc)
+        
+        # If it's a date but not a datetime (legacy payments)
+        if isinstance(dt_value, date) and not isinstance(dt_value, datetime):
+            dt_value = datetime.combine(dt_value, datetime.min.time())
+            
         if getattr(dt_value, "tzinfo", None) is None:
             return dt_value.replace(tzinfo=timezone.utc)
         return dt_value
