@@ -35,10 +35,11 @@
             <thead>
                 <tr>
                     <th>Fecha</th>
+                    <th>Factura</th>
                     <th>Descripción</th>
                     <th style="text-align: right;">Debe (Venta)</th>
                     <th style="text-align: right;">Haber (Pago)</th>
-                    <!-- Running balance per row is tricky in simple jinja, skipping for now -->
+                    <th style="text-align: right;">Saldo Factura</th>
                 </tr>
             </thead>
             <tbody>
@@ -46,18 +47,22 @@
                 {% for mov in movements %}
                 <tr>
                     <td>{{ mov.date.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ mov.invoice }}</td>
                     <td>{{ mov.description }}</td>
-
+ 
                     <td style="text-align: right; color: #ef4444; font-weight: 500;">
-                        {% if mov.type == 'sale' %} ${{ mov.amount }} {% endif %}
+                         {% if mov.type == 'sale' %} ${{ mov.amount }} {% endif %}
                     </td>
                     <td style="text-align: right; color: #10b981; font-weight: 500;">
-                        {% if mov.type == 'payment' %} ${{ mov.amount }} {% endif %}
+                         {% if mov.type == 'payment' %} ${{ mov.amount }} {% endif %}
+                    </td>
+                    <td style="text-align: right; color: #b45309; font-weight: 600;">
+                        {% if mov.type == 'sale' %} ${{ mov.pending | round(2) }} {% else %}-{% endif %}
                     </td>
                 </tr>
                 {% else %}
                 <tr>
-                    <td colspan="4" style="text-align: center; padding: 24px;">Sin movimientos registrados.</td>
+                    <td colspan="6" style="text-align: center; padding: 24px;">Sin movimientos registrados.</td>
                 </tr>
                 {% endfor %}
             </tbody>

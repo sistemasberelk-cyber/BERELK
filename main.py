@@ -285,19 +285,31 @@ def get_client_account(id: int, request: Request, user: User = Depends(require_a
     total_paid = sum(p.amount for p in payments_list)
     balance = float(total_debt - total_paid)
     
+    from database.models import PaymentAllocation
+    sale_pending_map = {}
+    for s in sales:
+        allocated = session.exec(
+            select(func.sum(PaymentAllocation.amount_applied)).where(PaymentAllocation.sale_id == s.id)
+        ).one() or 0.0
+        sale_pending_map[s.id] = float((s.total_amount or 0.0) - allocated)
+
     movements = []
     for s in sales:
         movements.append({
             "date": s.timestamp,
             "description": f"Venta #{s.id}",
+            "invoice": f"FAC-{s.id}",
             "amount": s.total_amount,
+            "pending": max(sale_pending_map.get(s.id, 0.0), 0.0),
             "type": "sale"
         })
     for p in payments_list:
         movements.append({
             "date": p.date,
             "description": f"Abono: {p.note or ''}",
+            "invoice": "-",
             "amount": p.amount,
+            "pending": None,
             "type": "payment"
         })
         
@@ -1321,6 +1333,19 @@ def get_cash_book(
     total_in = total_in_cash + total_in_transfer
     balance = total_in - total_out
 
+    account_sales = session.exec(
+        select(Sale).where(
+            Sale.tenant_id == tenant_id,
+            Sale.timestamp >= day_start,
+            Sale.timestamp < day_end,
+            Sale.client_id.is_not(None),
+            Sale.total_amount > Sale.amount_paid,
+        ).order_by(Sale.timestamp.desc())
+    ).all()
+    if last_close_ts:
+        account_sales = [s for s in account_sales if s.timestamp > last_close_ts]
+    total_account_receivable = sum(max((s.total_amount or 0.0) - (s.amount_paid or 0.0), 0.0) for s in account_sales)
+
     return templates.TemplateResponse(
         "cash_book.html",
         {
@@ -1333,6 +1358,8 @@ def get_cash_book(
             "total_out": abs(total_out),
             "balance": balance,
             "selected_date": target_date.isoformat(),
+            "account_sales": account_sales,
+            "total_account_receivable": total_account_receivable,
         },
     )
 

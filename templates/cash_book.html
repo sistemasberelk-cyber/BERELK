@@ -39,6 +39,45 @@
                 ${{ balance | round(2) }}
             </div>
         </div>
+        <div class="dashboard-total-card"
+            style="padding: 16px; border-radius: 12px; border: 1px solid #f59e0b; background: rgba(245, 158, 11, 0.08);">
+            <div style="color: #6b7280; font-size: 0.9em; text-transform: uppercase;">Cuenta Corriente (Debe)</div>
+            <div style="font-size: 1.8em; font-weight: bold; color: #b45309;">${{ total_account_receivable | round(2) }}</div>
+        </div>
+    </div>
+
+    <h3>Ventas a Cuenta Corriente del Día</h3>
+    <div class="table-container" style="margin-bottom: 24px;">
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Cliente</th>
+                    <th>Factura</th>
+                    <th style="text-align: right;">Total Factura</th>
+                    <th style="text-align: right;">Pagado</th>
+                    <th style="text-align: right;">Debe</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for sale in account_sales %}
+                <tr>
+                    <td>{{ sale.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>{{ sale.client.name if sale.client else 'Cliente sin nombre' }}</td>
+                    <td>FAC-{{ sale.id }}</td>
+                    <td style="text-align: right;">${{ sale.total_amount | round(2) }}</td>
+                    <td style="text-align: right;">${{ (sale.amount_paid or 0) | round(2) }}</td>
+                    <td style="text-align: right; color:#b91c1c; font-weight:700;">
+                        ${{ ((sale.total_amount or 0) - (sale.amount_paid or 0)) | round(2) }}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="6" style="text-align:center; padding: 18px;">Sin ventas a cuenta corriente en este día.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 
     <h3>Libro de Movimientos (Últimos 100)</h3>
