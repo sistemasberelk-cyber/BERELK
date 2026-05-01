@@ -285,51 +285,88 @@ def get_client_account(id: int, request: Request, user: User = Depends(require_a
     total_paid = sum((p.amount or 0.0) for p in payments_list)
     balance = float(total_debt - total_paid)
     
-    from database.models import PaymentAllocation
-    sale_pending_map = {}
-    for s in sales:
-        allocated = session.exec(
-            select(func.sum(PaymentAllocation.amount_applied)).where(PaymentAllocation.sale_id == s.id)
-        ).one() or 0.0
-        # Fallback for legacy rows without allocations: use paid amount split at sale level.
-        if allocated <= 0 and (s.amount_paid or 0.0) > 0:
-            allocated = s.amount_paid or 0.0
-        sale_pending_map[s.id] = max(float((s.total_amount or 0.0) - allocated), 0.0)
-
+    # 3. Build detailed ledger movements
     movements = []
-    for s in sales:
-        movements.append({
-            "date": s.timestamp,
-            "description": f"Venta #{s.id}",
-            "invoice": f"FAC-{s.id}",
-            "amount": s.total_amount,
-            "pending": max(sale_pending_map.get(s.id, 0.0), 0.0),
-            "type": "sale"
-        })
-    for p in payments_list:
-        movements.append({
-            "date": p.date,
-            "description": f"Abono: {p.note or ''}",
-            "invoice": "-",
-            "amount": p.amount,
-            "pending": None,
-            "type": "payment"
-        })
-        
-    # Sort by date descending (defensive against null / naive-aware / date-datetime mix).
+    
+    # helper for sorting mixed types
     def _sort_date(dt_value):
         if dt_value is None:
             return datetime.min.replace(tzinfo=timezone.utc)
-        
-        # If it's a date but not a datetime (legacy payments)
         if isinstance(dt_value, date) and not isinstance(dt_value, datetime):
             dt_value = datetime.combine(dt_value, datetime.min.time())
-            
         if getattr(dt_value, "tzinfo", None) is None:
             return dt_value.replace(tzinfo=timezone.utc)
         return dt_value
 
-    movements.sort(key=lambda x: _sort_date(x.get("date")), reverse=True)
+    for s in sales:
+        # 1. Add each item as "Mercaderia"
+        for item in s.items:
+            movements.append({
+                "date": s.timestamp,
+                "type": "Mercaderia",
+                "quantity": item.quantity,
+                "description": item.product_name,
+                "price": item.unit_price,
+                "debit": item.total,
+                "credit": 0.0,
+            })
+        
+        # 2. Add partial payments at time of sale
+        if (s.amount_cash or 0.0) > 0:
+            movements.append({
+                "date": s.timestamp,
+                "type": "Efectivo",
+                "quantity": 0,
+                "description": f"Pago efectivo s/Venta #{s.id}",
+                "price": 0.0,
+                "debit": 0.0,
+                "credit": s.amount_cash,
+            })
+        if (s.amount_transfer or 0.0) > 0:
+            movements.append({
+                "date": s.timestamp,
+                "type": "Transf",
+                "quantity": 0,
+                "description": f"Pago transf s/Venta #{s.id}",
+                "price": 0.0,
+                "debit": 0.0,
+                "credit": s.amount_transfer,
+            })
+        # Fallback for old sales with generic amount_paid
+        if (s.amount_cash or 0.0) == 0 and (s.amount_transfer or 0.0) == 0 and (s.amount_paid or 0.0) > 0:
+            movements.append({
+                "date": s.timestamp,
+                "type": s.payment_method.title() if s.payment_method else "Pago",
+                "quantity": 0,
+                "description": f"Pago s/Venta #{s.id}",
+                "price": 0.0,
+                "debit": 0.0,
+                "credit": s.amount_paid,
+            })
+
+    for p in payments_list:
+        movements.append({
+            "date": p.date,
+            "type": "Abono",
+            "quantity": 0,
+            "description": p.note or "Abono a cuenta corriente",
+            "price": 0.0,
+            "debit": 0.0,
+            "credit": p.amount,
+        })
+        
+    # Sort chronologically to calculate running balance
+    movements.sort(key=lambda x: _sort_date(x.get("date")))
+    
+    current_balance = 0.0
+    for m in movements:
+        current_balance += (m["debit"] or 0.0)
+        current_balance -= (m["credit"] or 0.0)
+        m["running_balance"] = current_balance
+
+    # For display, we might want to keep it chronological or reverse. 
+    # Excel-style ledger is usually chronological.
+    # We will pass it as is (ASC).
     
     return templates.TemplateResponse("client_account.html", {
         "request": request, 
