@@ -84,9 +84,9 @@ No se pasa a la fase N+1 sin cumplir el DoD de la fase N. Esto es lo que corrige
 ### **Fase 3 — AlexIO como interfaz sobre el cerebro ya validado**
 *AlexIO no es un componente nuevo — es una UI conversacional sobre lo que Fase 2 ya construyó.*
 
-- [ ] Endpoint `/api/v1/ai/alex-io` que reutiliza `AIBrain` de Fase 2, sin lógica de negocio duplicada.
-- [ ] Widget `components/AlexIO.jsx`: chat flotante, sugerencias de producto, agregar al carrito.
-- [ ] Voz a texto y micro-animaciones son mejoras de UI, no bloqueantes — van al final de esta fase, no antes de que el chat funcione bien en texto plano.
+- [x] Endpoint `/api/v1/ai/alex-io` que reutiliza `AIBrain` de Fase 2, sin lógica de negocio duplicada.
+- [x] Widget `components/AlexIO.jsx`: chat flotante, sugerencias de producto, agregar al carrito.
+- [x] Voz a texto y micro-animaciones son mejoras de UI, no bloqueantes — van al final de esta fase, no antes de que el chat funcione bien en texto plano.
 
 **Definition of Done:** un usuario puede completar una compra guiada por AlexIO de punta a punta en un tenant de prueba.
 
