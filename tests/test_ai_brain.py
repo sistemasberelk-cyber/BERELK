@@ -1,7 +1,12 @@
 import pytest
-from unittest.mock import AsyncMock, patch
+import json
+import httpx
+from unittest.mock import AsyncMock, MagicMock, patch
 from sqlmodel import Session, SQLModel, create_engine
 from sqlalchemy.pool import StaticPool
+from fastapi.testclient import TestClient
+from main import app
+from database.session import get_session
 from database.models import Tenant, User, Product, BinStock, Bin, Location, Sale
 from services.ai_brain_service import ai_brain_service
 from datetime import datetime
@@ -20,6 +25,12 @@ def session():
     SQLModel.metadata.create_all(engine)
     with Session(engine) as session:
         yield session
+
+@pytest.fixture
+def client(session):
+    app.dependency_overrides[get_session] = lambda: session
+    yield TestClient(app)
+    app.dependency_overrides.clear()
 
 @pytest.mark.anyio
 async def test_execute_tool_consultar_stock_injection(session):
@@ -63,8 +74,6 @@ async def test_execute_tool_consultar_stock_injection(session):
     assert res1["name"] == "Coca Cola"
 
     # Test cross-tenant security: t1 trying to consult t2's product p2.id
-    # Regla 1.1: El model llama a consultar_stock(product_id=p2.id) pero como se inyecta tenant_id=t1.id
-    # el backend debe retornar error indicando que no pertenece a su tenant.
     res_cross = await ai_brain_service._execute_tool(session, tenant_id=t1.id, name="consultar_stock", args={"product_id": p2.id})
     assert "error" in res_cross
     assert "not found or access denied" in res_cross["error"].lower()
@@ -93,3 +102,50 @@ async def test_execute_tool_obtener_metricas_ventas_isolation(session):
     assert "error" not in res
     assert res["total_sales_amount"] == 1500.0
     assert res["sales_count"] == 1
+
+@pytest.mark.anyio
+async def test_alex_io_route_successful(client, session, monkeypatch):
+    t1 = Tenant(name="Tenant 1", subdomain="t1")
+    session.add(t1)
+    session.commit()
+
+    # Mock response from Gemini API
+    mock_response_data = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {
+                            "text": "Hola, el stock para Coca Cola es de 50 unidades."
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+
+    async def mock_post(*args, **kwargs):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json = lambda: mock_response_data
+        return mock_resp
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", mock_post)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+
+    payload = {
+        "history": [],
+        "new_message": "Hola Alex, ¿cuál es el stock del producto 1?",
+        "system_instruction": "Test instruction"
+    }
+
+    response = client.post(
+        "/api/v1/ai/alex-io",
+        headers={"x-tenant-subdomain": "t1"},
+        json=payload
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "stock" in data["response"]

@@ -9,7 +9,7 @@ import json
 import httpx
 from database.session import get_session
 from database.models import User
-from web.dependencies import get_current_user
+from web.dependencies import get_current_user, get_current_tenant
 from services.gemini_service import GeminiService
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI Services"])
@@ -136,6 +136,25 @@ async def chat_bot_response(req: ChatRequest, db: Session = Depends(get_session)
         raise HTTPException(status_code=500, detail="Gemini API Key no configurada.")
     try:
         response_text = await GeminiService.chat_bot_response(req.history, req.new_message, req.system_instruction, GEMINI_API_KEY)
+        return {"success": True, "response": response_text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/alex-io")
+async def alex_io_chat(
+    req: ChatRequest,
+    db: Session = Depends(get_session),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    from services.ai_brain_service import ai_brain_service
+    try:
+        response_text = await ai_brain_service.chat_response(
+            session=db,
+            tenant_id=tenant_id,
+            history=req.history,
+            new_message=req.new_message,
+            system_instruction=req.system_instruction
+        )
         return {"success": True, "response": response_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

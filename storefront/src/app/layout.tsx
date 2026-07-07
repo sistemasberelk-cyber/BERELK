@@ -2,6 +2,7 @@ import { getBaseURL } from "@lib/util/env"
 import { Metadata } from "next"
 import "styles/globals.css"
 import React from "react"
+import AlexIO from "@modules/common/components/AlexIO"
 
 export const metadata: Metadata = {
   metadataBase: new URL(getBaseURL()),
@@ -81,7 +82,10 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
         />
       </head>
       <body className={`font-sans antialiased theme-transition ${themeMode === "dark" ? "dark" : ""}`}>
-        <main className="relative">{props.children}</main>
+        <main className="relative">
+          {props.children}
+          <AlexIO />
+        </main>
       </body>
     </html>
   )
