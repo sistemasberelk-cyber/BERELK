@@ -113,8 +113,12 @@ class Tax(SQLModel, table=True):
 # ===========================================================================
 
 class Client(SQLModel, table=True):
+    __table_args__ = (
+        Index("ix_client_tenant_name", "tenant_id", "name"),
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id", index=True)
 
     name: str = Field(index=True)
     phone: Optional[str] = None
@@ -142,8 +146,12 @@ class Client(SQLModel, table=True):
 # ===========================================================================
 
 class User(SQLModel, table=True):
+    __table_args__ = (
+        Index("ix_user_tenant_username", "tenant_id", "username"),
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id", index=True)
     tenant: Optional[Tenant] = Relationship(sa_relationship=relationship("Tenant", back_populates="users"))
 
     username: str = Field(index=True, unique=True)
@@ -187,7 +195,7 @@ class Product(SQLModel, table=True):
     )
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id", index=True)
 
     name: str
     description: Optional[str] = None
@@ -239,10 +247,15 @@ from typing import Any, Dict
 class SyncQueue(SQLModel, table=True):
     __tablename__ = "sync_queue"
 
+    __table_args__ = (
+        Index("ix_sync_queue_tenant_status", "tenant_id", "status"),
+    )
+
     id: str = Field(
         default_factory=lambda: str(uuid_module.uuid4()),
         primary_key=True
     )
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id", index=True)
     entity_type: str = Field(index=True)  # 'product' | 'inventory' | 'price'
     entity_id: str = Field(index=True)
     payload: Dict[str, Any] = Field(
@@ -275,8 +288,12 @@ class Sale(SQLModel, table=True):
     Los métodos de pago viven en PaymentAllocation (1 venta → N pagos).
     """
 
+    __table_args__ = (
+        Index("ix_sale_tenant_timestamp", "tenant_id", "timestamp"),
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id", index=True)
 
     timestamp: datetime = Field(default_factory=_utcnow)
     total_amount: float = Field(default=0.0)
@@ -406,8 +423,12 @@ class Payment(SQLModel, table=True):
 # ===========================================================================
 
 class Supplier(SQLModel, table=True):
+    __table_args__ = (
+        Index("ix_supplier_tenant_name", "tenant_id", "name"),
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
-    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id")
+    tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id", index=True)
 
     name: str = Field(index=True)
     phone: Optional[str] = None

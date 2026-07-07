@@ -279,8 +279,9 @@ class MedusaSyncService:
             
         return {"enqueued": enqueued, "total_products": len(products)}
 
-    def enqueue(self, db: Session, entity_type: str, payload: dict, error: str = "") -> None:
+    def enqueue(self, db: Session, entity_type: str, payload: dict, tenant_id: int | None = None, error: str = "") -> None:
         item = SyncQueue(
+            tenant_id=tenant_id,
             entity_type=entity_type,
             entity_id=str(payload.get("id", "")),
             payload=payload,
@@ -289,7 +290,7 @@ class MedusaSyncService:
         )
         db.add(item)
         db.commit()
-        logger.info(f"📥 Encolado {entity_type} {payload.get('id')} para reintento")
+        logger.info(f"📥 Encolado {entity_type} {payload.get('id')} para reintento (tenant: {tenant_id})")
 
 
     async def sync_product_safe(
@@ -324,15 +325,17 @@ class MedusaSyncService:
 
         except MedusaSyncError as e:
             logger.error(f"❌ Error al sincronizar producto {vibecloud_product.get('id')}: {e}")
-            self.enqueue(db, "product", vibecloud_product, error=str(e))
+            t_id = int(tenant_id) if tenant_id and str(tenant_id).isdigit() else None
+            self.enqueue(db, "product", vibecloud_product, tenant_id=t_id, error=str(e))
             return {"status": "failed", "error": str(e)}
         except Exception as e:
             logger.error(f"⚠️ Medusa no disponible o error fatal. Encolando: {e}")
-            self.enqueue(db, "product", vibecloud_product, error=str(e))
+            t_id = int(tenant_id) if tenant_id and str(tenant_id).isdigit() else None
+            self.enqueue(db, "product", vibecloud_product, tenant_id=t_id, error=str(e))
             return {"status": "queued", "error": str(e)}
 
     async def process_queue(self, db: Session) -> dict:
-        """Procesa hasta 50 items pendientes en sync_queue."""
+        """Procesa hasta 50 items pendientes en sync_queue usando SKIP LOCKED en Postgres."""
         stmt = (
             select(SyncQueue)
             .where(SyncQueue.status.in_(["pending", "failed"]))
@@ -340,6 +343,9 @@ class MedusaSyncService:
             .order_by(SyncQueue.created_at)
             .limit(50)
         )
+        if db.bind and db.bind.dialect.name == "postgresql":
+            stmt = stmt.with_for_update(skip_locked=True)
+            
         items = db.exec(stmt).all()
 
         processed, errors = 0, 0
@@ -351,8 +357,7 @@ class MedusaSyncService:
             db.commit()
 
             try:
-                # Assuming product for now; can branch on entity_type later
-                tenant_id = item.payload.get("tenant_id") or "default"
+                tenant_id = str(item.tenant_id) if item.tenant_id is not None else "default"
                 result = await self.sync_product_safe(item.payload, tenant_id, db, item.payload.get("medusa_product_id"))
                 item.status = "done" if result["status"] == "synced" else "failed"
                 if result.get("error"):
