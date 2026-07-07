@@ -95,12 +95,12 @@ No se pasa a la fase N+1 sin cumplir el DoD de la fase N. Esto es lo que corrige
 ### **Fase 4 — Cascada de IA completa + AI Template Studio + monetización**
 *Recién acá se justifica cobrar por IA, porque ya demostró ser confiable en Fases 2 y 3.*
 
-- [ ] Cascada de 3 niveles (ver informe de infraestructura ya validado — sección 5 de este documento).
-- [ ] Circuit breakers + fallback entre proveedores por nivel.
-- [ ] Cuotas por tenant (`ai_tier`, `ai_credits`).
-- [ ] AI Template Studio **con** sanitización obligatoria (regla 1.2) desde el primer commit, no agregada después de un incidente.
-- [ ] Landing Pages dinámicas vía SSR/ISR, con el mismo pipeline de sanitización.
-- [ ] Módulo de compra de créditos integrado a facturación.
+- [x] Cascada de 3 niveles (ver informe de infraestructura ya validado — sección 5 de este documento).
+- [x] Circuit breakers + fallback entre proveedores por nivel.
+- [x] Cuotas por tenant (`ai_tier`, `ai_credits`).
+- [x] AI Template Studio **con** sanitización obligatoria (regla 1.2) desde el primer commit, no agregada después de un incidente.
+- [x] Landing Pages dinámicas vía SSR/ISR, con el mismo pipeline de sanitización.
+- [x] Módulo de compra de créditos integrado a facturación.
 
 **Definition of Done:** un tenant puede rediseñar su storefront por prompt sin que el HTML/CSS resultante pueda ejecutar código o filtrar datos de otro tenant. Auditoría de seguridad (aunque sea interna, no formal) antes de habilitarlo para clientes reales.
 
