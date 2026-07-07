@@ -58,12 +58,12 @@ No se pasa a la fase N+1 sin cumplir el DoD de la fase N. Esto es lo que corrige
 ### **Fase 1 — Fundamentos multi-tenant y resiliencia de datos**
 *Sin esto no hay SaaS, independientemente de qué tan buena sea la IA.*
 
-- [ ] `tenant_id` en todas las tablas críticas (`User`, `Product`, `Sale`, `Client`, `Supplier`, `SyncQueue`) + índices compuestos.
-- [ ] Dependencia `get_current_tenant()` en FastAPI que resuelve tenant desde subdominio/header **validado contra sesión**, no desde input libre.
-- [ ] Middleware Next.js que detecta subdominio y propaga `tenant_id` en cada llamada interna.
-- [ ] Kardex (`InventoryMovement`): todo cambio de stock queda registrado, nunca se sobreescribe silenciosamente.
-- [ ] `SyncQueue` con `SELECT FOR UPDATE SKIP LOCKED` para evitar duplicación si se escalan workers horizontalmente.
-- [ ] Separación física (instancia o esquema) entre DB del Core y DB de MedusaJS. Ningún proceso escribe en ambas.
+- [x] `tenant_id` en todas las tablas críticas (`User`, `Product`, `Sale`, `Client`, `Supplier`, `SyncQueue`) + índices compuestos.
+- [x] Dependencia `get_current_tenant()` en FastAPI que resuelve tenant desde subdominio/header **validado contra sesión**, no desde input libre.
+- [x] Middleware Next.js que detecta subdominio y propaga `tenant_id` en cada llamada interna.
+- [x] Kardex (`InventoryMovement`): todo cambio de stock queda registrado, nunca se sobreescribe silenciosamente.
+- [x] `SyncQueue` con `SELECT FOR UPDATE SKIP LOCKED` para evitar duplicación si se escalan workers horizontalmente.
+- [x] Separación física (instancia o esquema) entre DB del Core y DB de MedusaJS. Ningún proceso escribe en ambas.
 
 **Definition of Done:** dos tenants de prueba (`tenant_A`, `tenant_B`) con datos cruzados no pueden verse entre si bajo ningún endpoint, incluyendo bajo carga concurrente. Un test automatizado lo verifica en CI, no una revisión manual.
 
@@ -72,10 +72,10 @@ No se pasa a la fase N+1 sin cumplir el DoD de la fase N. Esto es lo que corrige
 ### **Fase 2 — Cerebro de IA, un solo nivel, sin monetización todavía**
 *Cerebro simple y confiable antes que cascada compleja.*
 
-- [ ] `services/ai_brain_service.py` con un único modelo (ver sección 3 para cuál usar).
-- [ ] Function calling con `tenant_id` inyectado server-side (regla 1.1 aplicada desde el día uno, no como parche después).
-- [ ] Herramientas mínimas: `consultar_stock`, `recomendar_productos`, `obtener_metricas_ventas`.
-- [ ] Sin distinción free/premium todavía. Sin créditos. Sin selección de modelo por tier de tenant.
+- [x] `services/ai_brain_service.py` con un único modelo (ver sección 3 para cuál usar).
+- [x] Function calling con `tenant_id` inyectado server-side (regla 1.1 aplicada desde el día uno, no como parche después).
+- [x] Herramientas mínimas: `consultar_stock`, `recomendar_productos`, `obtener_metricas_ventas`.
+- [x] Sin distinción free/premium todavía. Sin créditos. Sin selección de modelo por tier de tenant.
 
 **Definition of Done:** el cerebro responde consultas reales sobre datos del tenant correcto, con latencia medida (no estimada), y un test de prompt injection confirmando que no puede acceder a datos de otro tenant.
 
