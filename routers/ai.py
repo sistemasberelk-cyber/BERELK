@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from sqlmodel import Session
+from sqlmodel import Session, select
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 import os
@@ -8,9 +8,11 @@ import json
 # For the MVP, we simulate the structure or call the REST API directly
 import httpx
 from database.session import get_session
-from database.models import User
+from database.models import User, Tenant
 from web.dependencies import get_current_user, get_current_tenant
 from services.gemini_service import GeminiService
+import re
+from datetime import datetime
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI Services"])
 
@@ -158,3 +160,152 @@ async def alex_io_chat(
         return {"success": True, "response": response_text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+class UIConfigTheme(BaseModel):
+    primary_color: str
+    secondary_color: str
+    mode: str
+    background_gradient: Optional[str] = None
+    border_radius: Optional[str] = "8px"
+    font_family: Optional[str] = "Outfit"
+
+class TemplateStudioRequest(BaseModel):
+    prompt: str
+    page_name: str = "storefront_home"
+
+def sanitize_css_property(value: str) -> str:
+    """
+    Sanitizes CSS properties to block stored XSS and malformed styles.
+    Blocks url(), expression(), javascript:, script tags, etc.
+    """
+    if not value:
+        return ""
+    lower_val = value.lower()
+    unsafe_patterns = [
+        r"url\s*\(",
+        r"expression\s*\(",
+        r"javascript\s*:",
+        r"<script",
+        r"onload",
+        r"onerror",
+        r"import\s+",
+    ]
+    for pattern in unsafe_patterns:
+        if re.search(pattern, lower_val):
+            raise ValueError(f"Estilo CSS no seguro detectado: {value}")
+    sanitized = re.sub(r"[^\w\s\d#\(\)%\-,\.\x27\x22:/]", "", value)
+    return sanitized
+
+@router.post("/template-studio")
+async def ai_template_studio(
+    req: TemplateStudioRequest,
+    db: Session = Depends(get_session),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    from services.ai_brain_service import ai_brain_service
+    from database.models import UIConfig
+    
+    current_config = db.exec(
+        select(UIConfig).where(UIConfig.tenant_id == tenant_id, UIConfig.page_name == req.page_name)
+    ).first()
+    
+    current_context = ""
+    if current_config:
+        current_context = f"Configuración actual: {current_config.theme_json}"
+        
+    system_instruction = (
+        "Eres un diseñador web experto. Tu tarea es generar una paleta de colores y estilos en formato JSON. "
+        "Debes responder ÚNICAMENTE con un objeto JSON válido que cumpla este esquema:\n"
+        "{\n"
+        "  \"primary_color\": \"#HexColor\",\n"
+        "  \"secondary_color\": \"#HexColor\",\n"
+        "  \"mode\": \"light\" o \"dark\",\n"
+        "  \"background_gradient\": \"linear-gradient(to right, #Hex1, #Hex2)\",\n"
+        "  \"border_radius\": \"8px\" o similar,\n"
+        "  \"font_family\": \"Outfit\" o \"Inter\" o \"Roboto\" o \"Space Grotesk\" o \"DM Sans\"\n"
+        "}\n"
+        "No agregues markdown ni explicaciones adicionales, solo el JSON estructurado."
+    )
+    
+    prompt = f"Instrucción del usuario: {req.prompt}\n{current_context}"
+    
+    try:
+        response_text = await ai_brain_service.chat_response(
+            session=db,
+            tenant_id=tenant_id,
+            history=[],
+            new_message=prompt,
+            system_instruction=system_instruction,
+            model_name="gemini-3.1-pro"
+        )
+        
+        clean_json_str = response_text.replace("```json", "").replace("```", "").strip()
+        theme_dict = json.loads(clean_json_str)
+        validated_theme = UIConfigTheme(**theme_dict)
+        
+        sanitized_theme = {
+            "primary_color": sanitize_css_property(validated_theme.primary_color),
+            "secondary_color": sanitize_css_property(validated_theme.secondary_color),
+            "mode": validated_theme.mode if validated_theme.mode in ["light", "dark"] else "dark",
+            "background_gradient": sanitize_css_property(validated_theme.background_gradient or ""),
+            "border_radius": sanitize_css_property(validated_theme.border_radius or "8px"),
+            "font_family": validated_theme.font_family if validated_theme.font_family in ["Outfit", "Inter", "Roboto", "Space Grotesk", "DM Sans"] else "Outfit"
+        }
+        
+        if not current_config:
+            current_config = UIConfig(
+                tenant_id=tenant_id,
+                page_name=req.page_name,
+                layout_json=json.dumps({"modules": ["Header", "StorefrontHero", "StorefrontCatalog", "Footer"]}),
+                theme_json=json.dumps(sanitized_theme)
+            )
+        else:
+            current_config.theme_json = json.dumps(sanitized_theme)
+            current_config.updated_at = datetime.utcnow()
+            
+        db.add(current_config)
+        db.commit()
+        
+        return {
+            "success": True,
+            "theme": sanitized_theme
+        }
+        
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=f"Validación o límites fallidos: {val_err}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error en Template Studio: {str(e)}")
+
+@router.get("/credits")
+async def get_tenant_credits(
+    db: Session = Depends(get_session),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    tenant = db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant no encontrado.")
+    return {
+        "success": True,
+        "ai_tier": tenant.ai_tier,
+        "ai_credits": tenant.ai_credits
+    }
+
+@router.post("/credits/buy")
+async def buy_tenant_credits(
+    amount: int = 100,
+    db: Session = Depends(get_session),
+    tenant_id: int = Depends(get_current_tenant)
+):
+    tenant = db.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant no encontrado.")
+    
+    tenant.ai_credits += amount
+    db.add(tenant)
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": f"Se agregaron {amount} créditos con éxito.",
+        "ai_credits": tenant.ai_credits
+    }

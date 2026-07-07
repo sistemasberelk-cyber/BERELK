@@ -108,18 +108,34 @@ class AIBrainService:
         tenant_id: int,
         history: list,
         new_message: str,
-        system_instruction: str = "Eres un asistente virtual de ventas amable."
+        system_instruction: str = "Eres un asistente virtual de ventas amable.",
+        model_name: str = "gemini-3.5-flash"
     ) -> str:
         """
-        Processes a chat conversation turn with Gemini using unified gemini-3.5-flash.
+        Processes a chat conversation turn with Gemini using cascading model.
         Supports multi-turn tool calling with secure backend-injected tenant_id.
+        Deducts credits based on model used.
         """
+        # Validate model cascade
+        allowed_models = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.1-pro"]
+        if model_name not in allowed_models:
+            model_name = "gemini-3.5-flash"
+
+        # Check tenant credits
+        tenant = session.get(Tenant, tenant_id)
+        if not tenant:
+            raise ValueError("Tenant no encontrado.")
+
+        # Cost config: Pro is 10 credits, others are 1
+        cost = 10 if model_name == "gemini-3.1-pro" else 1
+
+        if tenant.ai_credits < cost:
+            raise ValueError(f"Créditos de IA insuficientes. Requiere {cost}, disponible {tenant.ai_credits}")
+
         api_key = cls._get_api_key(session, tenant_id)
         if not api_key:
             raise ValueError("GEMINI_API_KEY no configurada.")
 
-        # Unified model for Nivel 2
-        model_name = "gemini-3.5-flash"
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
 
         # Define tools schema (Regla 1.1: tenant_id is excluded from declarations)
@@ -244,6 +260,9 @@ class AIBrainService:
                     continue
                 else:
                     # Model returned a standard text response
+                    tenant.ai_credits -= cost
+                    session.add(tenant)
+                    session.commit()
                     return part.get("text", "")
 
         raise ValueError("Excedido el límite máximo de llamadas a herramientas en un solo turno.")

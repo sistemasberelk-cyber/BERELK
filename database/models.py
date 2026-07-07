@@ -69,6 +69,9 @@ class Tenant(SQLModel, table=True):
     subdomain: Optional[str] = Field(default=None, unique=True, index=True)
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=_utcnow)
+    
+    ai_tier: str = Field(default="free")
+    ai_credits: int = Field(default=100)
 
     users: List["User"] = Relationship(sa_relationship=relationship("User", back_populates="tenant"))
     settings: List["Settings"] = Relationship(sa_relationship=relationship("Settings", back_populates="tenant"))

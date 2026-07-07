@@ -101,6 +101,15 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass  # Column likely already exists
 
+    # Ensure ai_tier and ai_credits columns exist in tenant
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE tenant ADD COLUMN ai_tier VARCHAR DEFAULT 'free'"))
+            conn.execute(text("ALTER TABLE tenant ADD COLUMN ai_credits INTEGER DEFAULT 100"))
+            conn.commit()
+    except Exception:
+        pass  # Columns likely already exist
+
     try:
         with Session(engine) as session:
             try:
