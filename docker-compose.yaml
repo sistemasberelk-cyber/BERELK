@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: vibecloud-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: vibecloud_b2b
+      POSTGRES_USER: vibecloud_user
+      POSTGRES_PASSWORD: securepassword123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: vibecloud-redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vibecloud-backend
+    restart: always
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://vibecloud_user:securepassword123@postgres:5432/vibecloud_b2b
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=default-secret-key-change-in-prod
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - BASE_DOMAIN=vibecloud.local
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vibecloud-worker
+    restart: always
+    command: python -m workers.sync_queue_worker
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://vibecloud_user:securepassword123@postgres:5432/vibecloud_b2b
+      - REDIS_URL=redis://redis:6379/0
+
+  medusa:
+    image: node:18-alpine
+    container_name: vibecloud-medusa
+    restart: always
+    working_dir: /app
+    volumes:
+      - ./storefront:/app
+    command: npm run start
+    ports:
+      - "9000:9000"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+
+volumes:
+  postgres_data:

@@ -38,6 +38,7 @@ from routers.api.v1.ui_config import router as ui_config_v1_router
 from routers.api.v1.inventory import router as inventory_v1_router
 from routers.api.v1.medusa_sync import router as medusa_sync_v1_router
 from routers.ai import router as ai_router
+from routers.superadmin import router as superadmin_router
 from routers.store import router as store_router
 
 def setup_logging():
@@ -176,6 +177,7 @@ app.include_router(medusa_sync_v1_router, prefix="/api/v1", tags=["Medusa Sync V
 
 app.include_router(ai_router)
 app.include_router(store_router)
+app.include_router(superadmin_router)
 
 
 @app.get("/health")
