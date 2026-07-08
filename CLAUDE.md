@@ -109,11 +109,11 @@ No se pasa a la fase N+1 sin cumplir el DoD de la fase N. Esto es lo que corrige
 ### **Fase 5 — Operación, observabilidad y SuperAdmin**
 *Importa cuando ya hay tenants reales generando carga, no antes.*
 
-- [ ] Dashboard `/superadmin/dashboard`: tenants activos, plan, estado de pago.
-- [ ] Métricas de consumo de IA y bandwidth por tenant.
-- [ ] Health checks (`/health`, `/ready`) por servicio.
-- [ ] Auditoría automática de logs de acceso (la IA revisando logs es una feature válida, pero de Fase 5, no de Fase 1).
-- [ ] Preparación de infraestructura para DigitalOcean: Docker Compose/K8s, migración de Supabase a Managed Databases.
+- [x] Dashboard `/superadmin/dashboard`: tenants activos, plan, estado de pago.
+- [x] Métricas de consumo de IA y bandwidth por tenant.
+- [x] Health checks (`/health`, `/ready`) por servicio.
+- [x] Auditoría automática de logs de acceso (la IA revisando logs es una feature válida, pero de Fase 5, no de Fase 1).
+- [x] Preparación de infraestructura para DigitalOcean: Docker Compose/K8s, migración de Supabase a Managed Databases.
 
 **Definition of Done:** el equipo puede detectar y diagnosticar un incidente de un tenant específico sin acceder manualmente a logs crudos.
 
