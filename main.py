@@ -133,6 +133,24 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"user.client_id migration skipped (non-fatal): {e}")
 
+    # Ensure credit & tax columns exist in client table
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12, 2)"))
+            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS credit_enabled BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS razon_social VARCHAR"))
+            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS cuit VARCHAR"))
+            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS iva_category VARCHAR"))
+            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS transport_name VARCHAR"))
+            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS transport_address VARCHAR"))
+            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE"))
+            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE"))
+            conn.commit()
+        logger.info("client table columns ensured.")
+    except Exception as e:
+        logger.warning(f"client columns migration skipped (non-fatal): {e}")
+
+
 
 
     try:
