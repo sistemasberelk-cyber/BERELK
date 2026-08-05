@@ -124,6 +124,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"medusa_product_id migration skipped (non-fatal): {e}")
 
+    # Ensure client_id column exists in user table (added for B2B client portal)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS client_id INTEGER'))
+            conn.commit()
+        logger.info("client_id column ensured in user table.")
+    except Exception as e:
+        logger.warning(f"user.client_id migration skipped (non-fatal): {e}")
+
+
 
     try:
         with Session(engine) as session:
