@@ -3,9 +3,10 @@ import React from 'react';
 
 export default function CartDetail({ items, onUpdateQuantity, onUpdatePriceType, onRemoveItem, onClearCart }) {
   const calculateItemPrice = (item) => {
-    return item.price_type === 'bulk'
+    const raw = item.price_type === 'bulk'
       ? (item.product.price_bulk ?? item.product.price)
       : (item.product.price_retail ?? item.product.price);
+    return parseFloat(raw || 0);
   };
 
   const total = items.reduce((sum, item) => {

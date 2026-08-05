@@ -95,7 +95,7 @@ export default function DynamicViewRenderer({
         } else if (key === 'paymentsection' || key === 'payment') {
           componentProps = { cartItems, onProcessSale, processing };
         } else if (key === 'saleshistory' || key === 'sales') {
-          componentProps = { sales, totalCount: sales.length };
+          componentProps = { sales, totalCount: sales.length, userRole: user?.role || 'guest' };
         }
 
         return (

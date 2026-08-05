@@ -24,9 +24,12 @@ class PurchaseService:
         amount_paid: float = 0.0,
         cash_concept: str = "Pago de mercaderia",
     ) -> Purchase:
+        from decimal import Decimal
         if not items_data:
             raise ValueError("La compra debe tener al menos un producto")
-        if amount_paid < 0:
+        
+        dec_paid = Decimal(str(amount_paid))
+        if dec_paid < Decimal("0.00"):
             raise ValueError("El monto pagado no puede ser negativo")
 
         purchase = Purchase(
@@ -38,22 +41,22 @@ class PurchaseService:
         session.add(purchase)
         session.flush()
 
-        total_amount = 0.0
+        total_amount = Decimal("0.00")
         for item_info in items_data:
             product_id = item_info.get("product_id")
             quantity = int(item_info.get("quantity", 0))
-            unit_cost = float(item_info.get("unit_cost", 0.0))
+            unit_cost = Decimal(str(item_info.get("unit_cost", 0.0)))
 
             if quantity <= 0:
                 raise ValueError("La cantidad debe ser mayor a 0")
-            if unit_cost < 0:
+            if unit_cost < Decimal("0.00"):
                 raise ValueError("El costo unitario no puede ser negativo")
 
             product = session.get(Product, product_id)
             if not product or product.tenant_id != tenant_id:
                 raise ValueError(f"Producto ID {product_id} no encontrado")
 
-            item_total = quantity * unit_cost
+            item_total = Decimal(quantity) * unit_cost
             total_amount += item_total
 
             product.cost_price = unit_cost
@@ -71,23 +74,23 @@ class PurchaseService:
                 )
             )
 
-        if amount_paid > total_amount:
+        if dec_paid > total_amount:
             raise ValueError("El monto pagado no puede superar el total de la compra")
 
         purchase.total_amount = total_amount
-        if amount_paid == 0:
+        if dec_paid == Decimal("0.00"):
             purchase.status = "pending"
-        elif amount_paid < total_amount:
+        elif dec_paid < total_amount:
             purchase.status = "partial"
         else:
             purchase.status = "paid"
         session.add(purchase)
 
-        if amount_paid > 0:
+        if dec_paid > Decimal("0.00"):
             session.add(
                 CashMovement(
                     tenant_id=tenant_id,
-                    amount=-abs(amount_paid),
+                    amount=-abs(dec_paid),
                     movement_type="out",
                     concept=cash_concept,
                     reference_id=purchase.id,
@@ -102,6 +105,7 @@ class PurchaseService:
 
     @staticmethod
     def get_supplier_balance(session: Session, tenant_id: int, supplier_id: int) -> float:
+        from decimal import Decimal
         purchases = session.exec(
             select(Purchase).where(Purchase.supplier_id == supplier_id, Purchase.tenant_id == tenant_id)
         ).all()
@@ -125,8 +129,8 @@ class PurchaseService:
                 )
             ).all()
 
-        total_owed = sum(purchase.total_amount for purchase in purchases)
-        total_paid = sum(abs(payment.amount) for payment in [*direct_payments, *purchase_payments])
+        total_owed = sum((purchase.total_amount for purchase in purchases), Decimal("0.00"))
+        total_paid = sum((abs(payment.amount) for payment in [*direct_payments, *purchase_payments]), Decimal("0.00"))
         return float(total_owed - total_paid)
 
     @staticmethod

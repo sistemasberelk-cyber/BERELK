@@ -108,7 +108,9 @@ def create_sale(
         )
         return sale
     except ValueError as e:
+        msg = str(e)
+        status_code = 403 if ("cuenta corriente" in msg.lower() or "denegado" in msg.lower() or "habilitada" in msg.lower() or "excedido" in msg.lower() or "límite" in msg.lower() or "limite" in msg.lower()) else 400
         raise HTTPException(
-            status_code=400,
-            detail=str(e)
+            status_code=status_code,
+            detail=msg
         )

@@ -1,7 +1,9 @@
 'use client';
 import React, { useState } from 'react';
 
-export default function PaymentSection({ cartItems, onProcessSale, processing }) {
+export default function PaymentSection({ cartItems, onProcessSale, processing, currentUserClient, isCreditEnabled }) {
+  const canUseCredit = isCreditEnabled ?? currentUserClient?.credit_enabled ?? false;
+
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [amountPaid, setAmountPaid] = useState('');
   const [splitCash, setSplitCash] = useState('');
@@ -10,9 +12,10 @@ export default function PaymentSection({ cartItems, onProcessSale, processing })
   const [errorMsg, setErrorMsg] = useState('');
 
   const calculateItemPrice = (item) => {
-    return item.price_type === 'bulk'
+    const raw = item.price_type === 'bulk'
       ? (item.product.price_bulk ?? item.product.price)
       : (item.product.price_retail ?? item.product.price);
+    return parseFloat(raw || 0);
   };
 
   const total = cartItems.reduce((sum, item) => {
@@ -21,15 +24,20 @@ export default function PaymentSection({ cartItems, onProcessSale, processing })
 
   const handlePaymentMethodChange = (newMethod) => {
     setPaymentMethod(newMethod);
-    if (newMethod === 'mixed') {
+    if (newMethod === 'credit') {
+      setAmountPaid('0');
+      setSplitCash('');
+      setSplitTransfer('');
+    } else if (newMethod === 'mixed') {
       const half = (total / 2).toFixed(2);
       setSplitCash(half);
       setSplitTransfer(half);
+      setAmountPaid(total.toFixed(2));
     } else {
       setSplitCash('');
       setSplitTransfer('');
+      setAmountPaid(total.toFixed(2));
     }
-    setAmountPaid(total.toFixed(2));
   };
 
   const handleSubmit = (e) => {
@@ -41,13 +49,22 @@ export default function PaymentSection({ cartItems, onProcessSale, processing })
       return;
     }
 
+    const isCredit = paymentMethod === 'credit';
+    const normalizedMethod = isCredit ? 'cuenta_corriente' : paymentMethod;
+    const finalAmountPaid = isCredit ? 0 : (amountPaid ? parseFloat(amountPaid) : total);
+
     const payload = {
-      payment_method: paymentMethod,
-      client_id: clientId ? parseInt(clientId) : null,
-      amount_paid: amountPaid ? parseFloat(amountPaid) : total,
+      payment_method: normalizedMethod,
+      client_id: clientId ? parseInt(clientId, 10) : null,
+      amount_paid: finalAmountPaid,
       split_cash: paymentMethod === 'mixed' && splitCash ? parseFloat(splitCash) : null,
       split_transfer: paymentMethod === 'mixed' && splitTransfer ? parseFloat(splitTransfer) : null
     };
+
+    if (isCredit && !payload.client_id) {
+      setErrorMsg('Debe seleccionar un ID de cliente para venta a Cuenta Corriente.');
+      return;
+    }
 
     // Validation for mixed payment
     if (paymentMethod === 'mixed') {
@@ -77,7 +94,7 @@ export default function PaymentSection({ cartItems, onProcessSale, processing })
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
         {/* Client ID */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-          <label style={{ fontSize: '0.8rem', opacity: 0.8 }}>ID Cliente (Opcional):</label>
+          <label style={{ fontSize: '0.8rem', opacity: 0.8 }}>ID Cliente {paymentMethod === 'credit' ? '(Requerido for Deuda):' : '(Opcional):'}</label>
           <input
             type="number"
             placeholder="Ej: 1"
@@ -85,7 +102,7 @@ export default function PaymentSection({ cartItems, onProcessSale, processing })
             onChange={(e) => setClientId(e.target.value)}
             style={{
               background: 'var(--card-bg, rgba(0, 0, 0, 0.2))',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              border: paymentMethod === 'credit' && !clientId ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.1)',
               padding: '0.5rem',
               borderRadius: 'calc(var(--border-radius) / 2)',
               color: 'var(--text-color, #fff)',
@@ -113,7 +130,7 @@ export default function PaymentSection({ cartItems, onProcessSale, processing })
             <option value="cash">Efectivo</option>
             <option value="transfer">Transferencia</option>
             <option value="mixed">Pago Mixto (Efectivo + Transf.)</option>
-            <option value="credit">Cuenta Corriente (Deuda)</option>
+            {canUseCredit && <option value="credit">Cuenta Corriente (Deuda)</option>}
           </select>
         </div>
 
@@ -176,6 +193,11 @@ export default function PaymentSection({ cartItems, onProcessSale, processing })
               opacity: paymentMethod === 'credit' ? 0.5 : 1
             }}
           />
+          {paymentMethod === 'credit' && (
+            <div style={{ color: '#38bdf8', fontSize: '0.8rem', marginTop: '0.25rem', fontWeight: '500' }}>
+              ℹ️ Se registrará como deuda del cliente por ${total.toFixed(2)} (monto cobrado $0.00).
+            </div>
+          )}
         </div>
 
         {errorMsg && (
@@ -214,3 +236,4 @@ export default function PaymentSection({ cartItems, onProcessSale, processing })
     </div>
   );
 }
+

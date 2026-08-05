@@ -7,8 +7,9 @@ from database.models import CashMovement, Sale
 
 class CashService:
     @staticmethod
-    def calculate_daily_balance(session: Session, tenant_id: int, target_date: date) -> Dict[str, float]:
-        """Calcula el balance diario: ingresos (efectivo/transf), egresos y saldo."""
+    def calculate_daily_balance(session: Session, tenant_id: int, target_date: date) -> Dict[str, Any]:
+        """Calcula el balance diario con precisión Decimal: ingresos (efectivo/transf), egresos y saldo."""
+        from decimal import Decimal
         day_start = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=timezone.utc)
         day_end = day_start + timedelta(days=1)
 
@@ -31,13 +32,13 @@ class CashService:
 
         effective = [m for m in movements if not last_close_ts or m.timestamp > last_close_ts]
 
-        total_in_cash = 0.0
-        total_in_transfer = 0.0
-        total_out = 0.0
+        total_in_cash = Decimal("0.00")
+        total_in_transfer = Decimal("0.00")
+        total_out = Decimal("0.00")
 
         for m in effective:
-            amt = m.amount or 0.0
-            if amt > 0 and m.movement_type == "in":
+            amt = Decimal(str(m.amount)) if m.amount is not None else Decimal("0.00")
+            if amt > Decimal("0.00") and m.movement_type == "in":
                 cl = (m.concept or "").lower()
                 if "transferencia" in cl or "transfer" in cl:
                     total_in_transfer += amt
@@ -46,14 +47,13 @@ class CashService:
             else:
                 total_out += abs(amt)
 
-        # Ventas no registradas en CashMovement
         move_sale_ids = {m.reference_id for m in effective if m.reference_type == "sale" and m.reference_id}
         sales = session.exec(
             select(Sale).where(
                 Sale.tenant_id == tenant_id,
                 Sale.timestamp >= day_start,
                 Sale.timestamp < day_end,
-                Sale.amount_paid > 0
+                Sale.amount_paid > Decimal("0.00")
             )
         ).all()
 
@@ -62,32 +62,34 @@ class CashService:
             if s.id in move_sale_ids: continue
             
             for alloc in s.payment_allocations:
+                alloc_amt = Decimal(str(alloc.amount)) if alloc.amount is not None else Decimal("0.00")
                 if alloc.method in ["transfer", "qr"]:
-                    total_in_transfer += alloc.amount
+                    total_in_transfer += alloc_amt
                 else:
-                    total_in_cash += alloc.amount
+                    total_in_cash += alloc_amt
 
+        tot_in = total_in_cash + total_in_transfer
         return {
             "total_in_cash": total_in_cash,
             "total_in_transfer": total_in_transfer,
-            "total_in": total_in_cash + total_in_transfer,
+            "total_in": tot_in,
             "total_out": total_out,
-            "balance": (total_in_cash + total_in_transfer) - total_out
+            "balance": tot_in - total_out
         }
 
     @staticmethod
     def perform_cierre(session: Session, tenant_id: int, user_id: int) -> Dict[str, Any]:
         """Ejecuta el cierre de caja, retirando el saldo pendiente."""
+        from decimal import Decimal
         balance_data = CashService.calculate_daily_balance(session, tenant_id, date.today())
-        current_balance = balance_data["balance"]
+        current_balance = Decimal(str(balance_data["balance"]))
         
-        # Marcar ventas como cerradas
         open_sales = session.exec(select(Sale).where(Sale.tenant_id == tenant_id, Sale.is_closed == False)).all()
         for s in open_sales:
             s.is_closed = True
             session.add(s)
 
-        if current_balance > 0.01:
+        if current_balance > Decimal("0.01"):
             m = CashMovement(
                 tenant_id=tenant_id,
                 user_id=user_id,
@@ -103,7 +105,7 @@ class CashService:
                 tenant_id=tenant_id,
                 user_id=user_id,
                 movement_type="cierre",
-                amount=0.0,
+                amount=Decimal("0.00"),
                 concept="CIERRE_DE_CAJA (Sin saldo pendiente)",
                 timestamp=datetime.now(timezone.utc)
             )

@@ -15,10 +15,11 @@ CORRECCIONES APLICADAS:
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import List, Optional
 
 from cryptography.fernet import Fernet
-from sqlalchemy import CheckConstraint, Index, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, Index, Numeric, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 from sqlalchemy.orm import relationship
 
@@ -88,7 +89,7 @@ class Settings(SQLModel, table=True):
 
     company_name: str = Field(default="Berel K")
     logo_url: str = Field(default="/static/images/berelk_logo.png")
-    tax_rate: Optional[float] = Field(default=0.0)
+    tax_rate: Optional[Decimal] = Field(default=Decimal("0.00"), sa_column=Column(Numeric(5, 4), nullable=True))
     printer_name: Optional[str] = Field(default=None)
     label_width_mm: int = Field(default=60)
     label_height_mm: int = Field(default=40)
@@ -107,7 +108,7 @@ class Settings(SQLModel, table=True):
 class Tax(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
-    rate: float  # 0.21 → 21%
+    rate: Decimal = Field(default=Decimal("0.21"), sa_column=Column(Numeric(5, 4), nullable=False))
     is_active: bool = Field(default=True)
 
 
@@ -128,7 +129,8 @@ class Client(SQLModel, table=True):
     email: Optional[str] = None
     address: Optional[str] = None
     notes: Optional[str] = None
-    credit_limit: Optional[float] = Field(default=None)
+    credit_limit: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2), nullable=True))
+    credit_enabled: bool = Field(default=False)
 
     razon_social: Optional[str] = None
     cuit: Optional[str] = None
@@ -160,8 +162,9 @@ class User(SQLModel, table=True):
     username: str = Field(index=True, unique=True)
     password_hash: str
     full_name: Optional[str] = None
-    role: str = Field(default="admin")  # admin, cashier
-    is_active: bool = Field(default=True)
+    role: str = Field(default="admin")  # admin, cashier, seller, client
+    client_id: Optional[int] = Field(default=None, foreign_key="client.id")
+    is_active: bool = Field(default=False if False else True)
 
     # FIX #2: soft delete en User
     is_deleted: bool = Field(default=False)
@@ -204,12 +207,12 @@ class Product(SQLModel, table=True):
     description: Optional[str] = None
     barcode: str = Field(index=True)  # unique por tenant, no global
 
-    price: float = Field(default=0.0)
-    price_bulk: Optional[float] = Field(default=None)
-    price_retail: Optional[float] = Field(default=None)
+    price: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    price_bulk: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2), nullable=True))
+    price_retail: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(12, 2), nullable=True))
 
     medusa_product_id: Optional[str] = Field(default=None, index=True)
-    cost_price: float = Field(default=0.0)
+    cost_price: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
 
     # ELIMINADO: stock_quantity — fuente única de verdad es BinStock
     # Para leer stock: SELECT SUM(bs.quantity) FROM binstock bs WHERE bs.product_id = ? AND bs.tenant_id = ?
@@ -299,8 +302,8 @@ class Sale(SQLModel, table=True):
     tenant_id: Optional[int] = Field(default=None, foreign_key="tenant.id", index=True)
 
     timestamp: datetime = Field(default_factory=_utcnow)
-    total_amount: float = Field(default=0.0)
-    amount_paid: float = Field(default=0.0)
+    total_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    amount_paid: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
     payment_status: str = Field(default="paid")  # paid, partial, pending
     is_closed: bool = Field(default=False)
 
@@ -338,9 +341,9 @@ class SaleItem(SQLModel, table=True):
 
     product_name: str  # snapshot
     quantity: int
-    unit_price: float
-    total: float
-    cost_price_at_sale: float = Field(default=0.0)
+    unit_price: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    cost_price_at_sale: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
 
     sale: Optional[Sale] = Relationship(sa_relationship=relationship("Sale", back_populates="items"))
 
@@ -357,7 +360,7 @@ class PaymentAllocation(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     sale_id: int = Field(foreign_key="sale.id", index=True)
     method: str  # "cash", "transfer", "qr", "credit", "debit"
-    amount: float
+    amount: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
 
     sale: Optional[Sale] = Relationship(sa_relationship=relationship("Sale", back_populates="payment_allocations"))
 
@@ -383,9 +386,9 @@ class AccountReceivable(SQLModel, table=True):
     client_id: int = Field(foreign_key="client.id", index=True)
 
     invoice_number: Optional[str] = Field(default=None, index=True)
-    total: float
-    paid: float = Field(default=0.0)
-    balance: float  # = total - paid (actualizar al registrar Payment)
+    total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    paid: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
+    balance: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))  # = total - paid (actualizar al registrar Payment)
 
     issued_at: datetime = Field(default_factory=_utcnow)
     due_date: Optional[datetime] = Field(default=None)
@@ -412,7 +415,7 @@ class Payment(SQLModel, table=True):
     # Relación a la deuda específica que cancela
     receivable_id: Optional[int] = Field(default=None, foreign_key="accountreceivable.id", index=True)
 
-    amount: float
+    amount: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     method: str = Field(default="cash")  # cash, transfer, qr, etc.
     date: datetime = Field(default_factory=_utcnow)
     note: Optional[str] = None
@@ -458,7 +461,7 @@ class Purchase(SQLModel, table=True):
 
     timestamp: datetime = Field(default_factory=_utcnow)
     invoice_number: Optional[str] = None
-    total_amount: float = Field(default=0.0)
+    total_amount: Decimal = Field(default=Decimal("0.00"), sa_column=Column(Numeric(12, 2), nullable=False))
     status: str = Field(default="pending")  # pending, paid
 
     # FIX #2: soft delete en Purchase
@@ -476,8 +479,8 @@ class PurchaseItem(SQLModel, table=True):
 
     product_name: str
     quantity: int
-    unit_cost: float
-    total: float
+    unit_cost: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
+    total: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
 
     purchase: Optional[Purchase] = Relationship(sa_relationship=relationship("Purchase", back_populates="items"))
 
@@ -498,7 +501,7 @@ class CashMovement(SQLModel, table=True):
 
     timestamp: datetime = Field(default_factory=_utcnow)
     movement_type: str = Field(index=True)  # "in", "out", "cierre"
-    amount: float
+    amount: Decimal = Field(sa_column=Column(Numeric(12, 2), nullable=False))
     concept: str
 
     # Trazabilidad directa (restaurada)

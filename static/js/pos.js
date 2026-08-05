@@ -141,8 +141,8 @@ function loadCartState() {
 function renderProducts(products) {
     const container = document.getElementById('product-results');
     container.innerHTML = products.map(p => {
-        const hasBulk = p.price_bulk && p.price_bulk > 0;
-        const displayPrice = hasBulk ? p.price_bulk : p.price;
+        const hasBulk = p.price_bulk && parseFloat(p.price_bulk) > 0;
+        const displayPrice = parseFloat(hasBulk ? p.price_bulk : p.price || 0);
 
         return `
         <div class="product-card" onclick='addToCart(${JSON.stringify(p)})'>
@@ -153,7 +153,7 @@ function renderProducts(products) {
             <div style="font-weight: 700; font-size: 1rem; color: var(--text-main);">${p.name}</div>
             ${p.item_number ? `<div class="item-num">#${p.item_number}</div>` : ''}
             <div class="price">
-                $${displayPrice}
+                $${displayPrice.toFixed(2)}
                 ${hasBulk ? '<div class="bulk-tag">Precio bulto</div>' : ''}
             </div>
             <div style="font-size: 0.8rem; color: var(--text-muted);">Stock: ${p.stock_quantity}</div>
@@ -165,9 +165,9 @@ function renderProducts(products) {
 
 async function addToCart(product) {
     const prices = [
-        { key: 'unit', label: 'Por unidad', val: product.price },
-        { key: 'retail', label: 'Por mostrador', val: product.price_retail },
-        { key: 'bulk', label: 'Por bulto', val: product.price_bulk }
+        { key: 'unit', label: 'Por unidad', val: parseFloat(product.price || 0) },
+        { key: 'retail', label: 'Por mostrador', val: product.price_retail ? parseFloat(product.price_retail) : null },
+        { key: 'bulk', label: 'Por bulto', val: product.price_bulk ? parseFloat(product.price_bulk) : null }
     ];
 
     const inputOptions = {};
@@ -175,9 +175,9 @@ async function addToCart(product) {
 
     prices.forEach(p => {
         if (p.val && p.val > 0) {
-            inputOptions[p.key] = `${p.label} ($${p.val})`;
+            inputOptions[p.key] = `${p.label} ($${p.val.toFixed(2)})`;
         } else if (p.key === 'unit') {
-            inputOptions[p.key] = `${p.label} ($${p.val || 0})`;
+            inputOptions[p.key] = `${p.label} ($${(p.val || 0).toFixed(2)})`;
         }
     });
 
@@ -195,13 +195,13 @@ async function addToCart(product) {
 
     if (!selectedKey) return;
 
-    const finalPrice = prices.find(p => p.key === selectedKey).val;
+    const finalPrice = parseFloat(prices.find(p => p.key === selectedKey).val || 0);
     const finalLabel = prices.find(p => p.key === selectedKey).label;
     const lineKey = buildLineKey(product.id, selectedKey);
 
     const { value: qty } = await Swal.fire({
         title: 'Cantidad',
-        html: `Producto: <b>${product.name}</b><br>Precio: <span style="color:green; font-weight:bold;">${finalLabel} ($${finalPrice})</span>`,
+        html: `Producto: <b>${product.name}</b><br>Precio: <span style="color:green; font-weight:bold;">${finalLabel} ($${finalPrice.toFixed(2)})</span>`,
         input: 'number',
         inputValue: document.getElementById('pos-qty').value || 1,
         inputAttributes: { min: 1, step: 1 },
@@ -255,7 +255,8 @@ function updateCart() {
     }
 
     tbody.innerHTML = cart.map(item => {
-        const lineTotal = item.unit_price * item.quantity;
+        const unitPrice = parseFloat(item.unit_price || 0);
+        const lineTotal = unitPrice * item.quantity;
         total += lineTotal;
         return `
         <tr>
@@ -271,7 +272,7 @@ function updateCart() {
                     <button onclick="updateItemQty('${item.line_key}', 1)" class="btn-secondary" style="width: 28px; height: 28px; border-radius: 6px; padding: 0;">+</button>
                 </div>
             </td>
-            <td style="text-align: right; font-weight: 600;">$${item.unit_price.toFixed(2)}</td>
+            <td style="text-align: right; font-weight: 600;">$${unitPrice.toFixed(2)}</td>
             <td style="text-align: right; font-weight: 800; color: var(--primary-color);">$${lineTotal.toFixed(2)}</td>
             <td style="width: 40px; text-align: right;">
                 <button onclick="removeFromCart('${item.line_key}')" style="background:none; border:none; color: var(--danger-color); cursor:pointer; font-size: 1.25rem;">&times;</button>

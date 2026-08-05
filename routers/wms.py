@@ -15,13 +15,16 @@ from services.bin_stock_service import BinStockService, StockServiceError
 
 router = APIRouter(prefix="/wms", tags=["WMS"])
 templates = Jinja2Templates(directory="templates")
-# Removed manual schema checked logic as it's now handled by Alembic migrations.
-
-
+# Schema compatibility is now handled by Alembic migrations.
+# This stub keeps backward-compatibility with the 18 call sites below.
+def _ensure_wms_schema_compat(session) -> None:
+    """No-op: schema is managed by Alembic. Kept for call-site compatibility."""
+    pass
 
 
 def _svc_error(e: StockServiceError):
     raise HTTPException(status_code=e.status_code, detail=e.message)
+
 
 
 

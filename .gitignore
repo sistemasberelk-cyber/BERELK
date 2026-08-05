@@ -13,6 +13,7 @@ ENV/
 # Database
 *.db
 *.sqlite3
+backup_pre_migracion_*
 
 # Credentials (NEVER COMMIT)
 credentials.json

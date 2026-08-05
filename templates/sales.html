@@ -84,7 +84,7 @@
                 </thead>
                 <tbody>
                     {% for sale in report.sales %}
-                    <tr>
+                    <tr style="{% if sale.payment_status == 'cancelled' %}opacity: 0.55; background: rgba(254, 226, 226, 0.2);{% endif %}">
                         <td>{{ sale.timestamp.strftime('%H:%M') }}</td>
                         <td style="font-weight: 500;">
                             {% if sale.client %}{{ sale.client.name }}{% else %}Consumidor Final{% endif %}
@@ -106,6 +106,8 @@
                             <span style="background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pagado</span>
                             {% elif sale.payment_status == 'partial' %}
                             <span style="background: #fef3c7; color: #d97706; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Parcial</span>
+                            {% elif sale.payment_status == 'cancelled' %}
+                            <span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem; font-weight: bold;">🚫 Anulada</span>
                             {% else %}
                             <span style="background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 99px; font-size: 0.8rem;">Pendiente</span>
                             {% endif %}
@@ -115,6 +117,12 @@
                                 style="text-decoration: none; display: inline-block; padding: 4px 8px; background: #e0e7ff; color: #4338ca; border-radius: 4px; font-size: 0.8em;">
                                 📄 Remito
                             </a>
+                            {% if user.role == 'admin' and sale.payment_status != 'cancelled' and not sale.is_closed %}
+                            <button onclick="anularVenta({{ sale.id }})" class="btn-small"
+                                style="padding: 4px 8px; background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-radius: 4px; font-size: 0.8em; cursor: pointer; margin-left: 4px;">
+                                🚫 Anular
+                            </button>
+                            {% endif %}
                         </td>
                         <td>
                             <ul style="list-style: none; padding: 0; margin: 0; font-size: 0.85rem;">
@@ -136,4 +144,54 @@
     {% endfor %}
 
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+async function anularVenta(saleId) {
+    const { value: reason, isConfirmed } = await Swal.fire({
+        title: 'Anular Venta #' + saleId,
+        input: 'text',
+        inputLabel: 'Motivo de la anulación',
+        inputPlaceholder: 'Ej: Error de cajero / Devolución',
+        inputValue: 'Anulación manual',
+        showCancelButton: true,
+        confirmButtonText: 'Sí, anular venta',
+        confirmButtonColor: '#ef4444',
+        cancelButtonText: 'Cancelar'
+    });
+
+    if (!isConfirmed || !reason) return;
+
+    const formData = new FormData();
+    formData.append('reason', reason);
+
+    try {
+        const res = await fetch(`/api/sales/${saleId}/cancel`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            Swal.fire({
+                icon: 'success',
+                title: 'Venta Anulada',
+                text: `La venta #${saleId} fue anulada correctamente. Stock y caja revertidos.`,
+                timer: 2000
+            }).then(() => {
+                window.location.reload();
+            });
+        } else {
+            const err = await res.json().catch(() => ({}));
+            Swal.fire({
+                icon: 'error',
+                title: 'No se pudo anular',
+                text: err.detail || 'Error al procesar la anulación'
+            });
+        }
+    } catch (e) {
+        Swal.fire('Error', 'Fallo de conexión: ' + e.message, 'error');
+    }
+}
+</script>
 {% endblock %}

@@ -10,3 +10,66 @@ INFO:     Waiting for application startup.
 INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
 INFO  [alembic.runtime.migration] Will assume transactional DDL.
 WARNI [web.scheduler] Scheduler: Skipping tenant 1 - No Gemini API Key found.
+ERROR [web.scheduler] Scheduler: Failed to query tenants: (psycopg2.OperationalError) server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+[SQL: SELECT tenant.id, tenant.name, tenant.subdomain, tenant.is_active, tenant.created_at 
+FROM tenant]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+ERROR [web.scheduler] Scheduler: Failed to query tenants: (psycopg2.OperationalError) server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+[SQL: SELECT tenant.id, tenant.name, tenant.subdomain, tenant.is_active, tenant.created_at 
+FROM tenant]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+ERROR [web.scheduler] Scheduler: Failed to query tenants: (psycopg2.OperationalError) server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+[SQL: SELECT tenant.id, tenant.name, tenant.subdomain, tenant.is_active, tenant.created_at 
+FROM tenant]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+WARNI [web.scheduler] Scheduler: Skipping tenant 1 - No Gemini API Key found.
+ERROR [web.scheduler] Scheduler: Failed to query tenants: (psycopg2.OperationalError) server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+[SQL: SELECT tenant.id, tenant.name, tenant.subdomain, tenant.is_active, tenant.created_at 
+FROM tenant]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+WARNI [web.scheduler] Scheduler: Skipping tenant 1 - No Gemini API Key found.
+ERROR [web.scheduler] Scheduler: Failed to query tenants: (psycopg2.OperationalError) server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+[SQL: SELECT tenant.id, tenant.name, tenant.subdomain, tenant.is_active, tenant.created_at 
+FROM tenant]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+WARNI [web.scheduler] Scheduler: Skipping tenant 1 - No Gemini API Key found.
+ERROR [web.scheduler] Scheduler: Failed to query tenants: (psycopg2.OperationalError) server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+
+[SQL: SELECT tenant.id, tenant.name, tenant.subdomain, tenant.is_active, tenant.created_at 
+FROM tenant]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)

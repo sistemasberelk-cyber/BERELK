@@ -6,7 +6,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, Query
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlmodel import Session, func, select
-from database.models import Client, Payment, Sale, Settings, User
+from database.models import AccountReceivable, Client, Payment, Sale, Settings, User
 from database.session import get_session
 from services.settings_service import SettingsService
 from web.compat_templates import CompatTemplates
@@ -30,8 +30,18 @@ def get_clients_page(
 ):
     query = select(Client).where(Client.tenant_id == tenant_id, Client.is_deleted == False).order_by(Client.name)
     clients_page = paginate(session, query, page=page, size=size)
-    
-    balances = {c.id: sum(p.amount for p in c.payments) - sum(s.total_amount for s in c.sales) for c in clients_page.items}
+
+    # F3-9c: use SUM(AccountReceivable.balance) as source of truth for outstanding debt.
+    # This avoids mixing cash sales into the credit balance calculation.
+    balances: dict[int, float] = {}
+    for c in clients_page.items:
+        ar_balance = session.exec(
+            select(func.sum(AccountReceivable.balance)).where(
+                AccountReceivable.client_id == c.id,
+                AccountReceivable.status.in_(["pending", "partial"]),
+            )
+        ).one() or 0.0
+        balances[c.id] = round(ar_balance, 2)
     
     return _templates().TemplateResponse("clients.html", {
         "request": request, 
@@ -54,9 +64,24 @@ def get_client_account(id: int, request: Request, user: User = Depends(require_a
     sales = session.exec(select(Sale).where(Sale.client_id == id, Sale.tenant_id == tenant_id)).all()
     payments_list = session.exec(select(Payment).where(Payment.client_id == id, Payment.tenant_id == tenant_id)).all()
 
-    total_debt = sum((s.total_amount or 0.0) for s in sales)
-    total_paid = sum((p.amount or 0.0) for p in payments_list)
-    balance = float(total_debt - total_paid)
+    from decimal import Decimal
+
+    # F3-9c: balance is the sum of open AccountReceivable.balance — exact outstanding debt.
+    # Fallback to the old heuristic for clients who predate the AR migration.
+    ar_total_balance = session.exec(
+        select(func.sum(AccountReceivable.balance)).where(
+            AccountReceivable.client_id == id,
+            AccountReceivable.status.in_(["pending", "partial"]),
+        )
+    ).one() or None
+
+    if ar_total_balance is not None:
+        balance = Decimal(str(ar_total_balance))
+    else:
+        # Legacy fallback: client existed before AR tracking was introduced
+        total_debt = sum((Decimal(str(s.total_amount)) if s.total_amount else Decimal("0.00")) for s in sales if (s.amount_paid or Decimal("0.00")) < (s.total_amount or Decimal("0.00")))
+        total_paid = sum((Decimal(str(p.amount)) if p.amount else Decimal("0.00")) for p in payments_list)
+        balance = max(total_debt - total_paid, Decimal("0.00"))
 
     movements = []
 
@@ -71,40 +96,42 @@ def get_client_account(id: int, request: Request, user: User = Depends(require_a
     # Process Sales as groups
     for s in sales:
         invoice_num = f"FAC-{s.id}"
-        # One main row for the sale
         items_desc = ", ".join([f"{it.product_name} (x{it.quantity})" for it in s.items[:3]])
         if len(s.items) > 3: items_desc += "..."
         
-        pending_invoice = (s.total_amount or 0.0) - (s.amount_paid or 0.0)
+        tot_amt = Decimal(str(s.total_amount)) if s.total_amount else Decimal("0.00")
+        amt_pd = Decimal(str(s.amount_paid)) if s.amount_paid else Decimal("0.00")
+        pending_invoice = tot_amt - amt_pd
         
         movements.append({
             "date": s.timestamp,
             "invoice": invoice_num,
             "type": "Venta",
             "description": items_desc,
-            "debit": s.total_amount,
-            "credit": s.amount_paid,
+            "debit": tot_amt,
+            "credit": amt_pd,
             "pending": pending_invoice
         })
 
     # Process direct payments
     for p in payments_list:
+        p_amt = Decimal(str(p.amount)) if p.amount else Decimal("0.00")
         movements.append({
             "date": p.date,
             "invoice": "-",
             "type": "Abono",
             "description": p.note or "Abono a cuenta corriente",
-            "debit": 0.0,
-            "credit": p.amount,
+            "debit": Decimal("0.00"),
+            "credit": p_amt,
             "pending": None
         })
 
     movements.sort(key=lambda x: _sort_date(x.get("date")))
 
-    current_balance = 0.0
+    current_balance = Decimal("0.00")
     for m in movements:
-        current_balance += m["debit"] or 0.0
-        current_balance -= m["credit"] or 0.0
+        current_balance += m["debit"] or Decimal("0.00")
+        current_balance -= m["credit"] or Decimal("0.00")
         m["running_balance"] = current_balance
 
     return _templates().TemplateResponse("client_account.html", {
@@ -113,15 +140,72 @@ def get_client_account(id: int, request: Request, user: User = Depends(require_a
         "settings": settings,
         "user": user,
         "client": client,
-        "balance": round(balance, 2),
+        "balance": balance,
         "movements": movements
     })
 
 @router.post("/api/clients/{id}/pay")
-def register_payment(id: int, amount: float = Form(...), note: Optional[str] = Form(None), session: Session = Depends(get_session), user: User = Depends(require_auth), tenant_id: int = Depends(get_tenant)):
+def register_payment(
+    id: int,
+    amount: float = Form(...),
+    note: Optional[str] = Form(None),
+    method: str = Form("cash"),
+    session: Session = Depends(get_session),
+    user: User = Depends(require_auth),
+    tenant_id: int = Depends(get_tenant),
+):
+    from decimal import Decimal
     client = session.get(Client, id)
-    if not client or client.tenant_id != tenant_id: raise HTTPException(404, "Client not found")
-    session.add(Payment(tenant_id=tenant_id, client_id=id, amount=amount, note=note))
+    if not client or client.tenant_id != tenant_id:
+        raise HTTPException(404, "Client not found")
+    
+    dec_amount = Decimal(str(amount))
+    if dec_amount <= Decimal("0.00"):
+        raise HTTPException(400, "El monto del pago debe ser mayor a cero")
+
+    open_ars = session.exec(
+        select(AccountReceivable)
+        .where(
+            AccountReceivable.client_id == id,
+            AccountReceivable.status.in_(["pending", "partial"]),
+        )
+        .order_by(AccountReceivable.issued_at.asc())
+    ).all()
+
+    remaining = dec_amount
+    primary_receivable_id: Optional[int] = None
+
+    for ar in open_ars:
+        if remaining <= Decimal("0.00"):
+            break
+
+        ar_bal = Decimal(str(ar.balance))
+        ar_paid = Decimal(str(ar.paid or "0.00"))
+        apply = min(remaining, ar_bal)
+        ar.paid = ar_paid + apply
+        ar.balance = ar_bal - apply
+        remaining = remaining - apply
+
+        if ar.balance <= Decimal("0.00"):
+            ar.status = "paid"
+            ar.balance = Decimal("0.00")
+        else:
+            ar.status = "partial"
+
+        session.add(ar)
+
+        if primary_receivable_id is None:
+            primary_receivable_id = ar.id
+
+    payment = Payment(
+        tenant_id=tenant_id,
+        client_id=id,
+        amount=dec_amount,
+        method=method,
+        note=note,
+        receivable_id=primary_receivable_id,
+    )
+    session.add(payment)
     session.commit()
     return RedirectResponse(f"/clients/{id}/account", status_code=303)
 

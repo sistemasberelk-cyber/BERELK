@@ -111,6 +111,20 @@ async def lifespan(app: FastAPI):
     except Exception:
         pass  # Columns likely already exist
 
+    # Ensure medusa_product_id column exists in product (added after initial deploy)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE product ADD COLUMN IF NOT EXISTS medusa_product_id VARCHAR"))
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_product_medusa_product_id "
+                "ON product (medusa_product_id)"
+            ))
+            conn.commit()
+        logger.info("medusa_product_id column ensured in product table.")
+    except Exception as e:
+        logger.warning(f"medusa_product_id migration skipped (non-fatal): {e}")
+
+
     try:
         with Session(engine) as session:
             try:
@@ -184,23 +198,12 @@ app.include_router(superadmin_router)
 @app.head("/health")
 async def health_check(session: Session = Depends(get_session)):
     status = "healthy"
-    services = {"database": "ok", "medusa": "ok"}
+    services = {"database": "ok"}
     try:
         session.execute(text("SELECT 1"))
     except Exception as e:
         status = "degraded"
         services["database"] = f"error: {str(e)}"
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{settings.MEDUSA_URL}/admin/products?limit=1", 
-                headers={"Authorization": f"Bearer {settings.MEDUSA_ADMIN_API_KEY}"}
-            )
-            resp.raise_for_status()
-    except Exception as e:
-        status = "degraded"
-        services["medusa"] = f"error: {str(e)}"
         
     return {"status": status, "services": services}
 

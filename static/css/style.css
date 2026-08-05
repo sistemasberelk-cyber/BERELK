@@ -1,49 +1,63 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-    /* --- B2B Light Premium Theme --- */
-    --sidebar-bg: #e0f2fe;
-    --sidebar-hover: #bae6fd;
-    --primary-color: #38bdf8;
-    --primary-hover: #0ea5e9;
-    --accent-color: #f97316;
-    --accent-hover: #ea580c;
-    
-    --surface-color: #ffffff;
-    --surface-alt: #f1f5f9;
-    --main-bg: #f1f5f9;
-    --border-color: #e2e8f0;
-    --border-strong: #cbd5e1;
-    
-    --text-main: #1e293b;
-    --text-muted: #64748b;
-    --text-white: #ffffff;
-    --success-color: #16a34a;
-    --warning-color: #f59e0b;
-    --danger-color: #dc2626;
+    /* ── Enterprise Blue / Gray Palette ── */
+    --sidebar-bg:          #1e2a3b;     /* dark navy sidebar */
+    --sidebar-hover:       #263347;     /* slightly lighter on hover */
+    --sidebar-text:        #cbd5e1;     /* muted slate on dark bg */
+    --sidebar-text-active: #ffffff;
+    --sidebar-active-bg:   #2563eb;     /* blue-600 active pill */
 
-    --radius-sm: 8px;
-    --radius-md: 12px;
-    --radius-lg: 16px;
+    --primary-color:       #2563eb;     /* blue-600 */
+    --primary-hover:       #1d4ed8;     /* blue-700 */
+    --primary-light:       #eff6ff;     /* blue-50 */
+    --accent-color:        #3b82f6;     /* blue-500 (replaces orange) */
+    --accent-hover:        #2563eb;
+
+    --surface-color:       #ffffff;
+    --surface-alt:         #f8fafc;     /* slate-50 */
+    --main-bg:             #f1f5f9;     /* slate-100 */
+    --border-color:        #e2e8f0;     /* slate-200 */
+    --border-strong:       #94a3b8;     /* slate-400 */
+
+    --text-main:           #0f172a;     /* slate-900 */
+    --text-secondary:      #334155;     /* slate-700 */
+    --text-muted:          #64748b;     /* slate-500 */
+    --text-white:          #ffffff;
+
+    --success-color:       #16a34a;
+    --warning-color:       #d97706;
+    --danger-color:        #dc2626;
+
+    --radius-sm:  6px;
+    --radius-md:  10px;
+    --radius-lg:  14px;
     --radius-full: 9999px;
 
-    /* Sidebar width tokens */
-    --sidebar-width: 220px;
-    --sidebar-collapsed-width: 64px;
+    --sidebar-width:           220px;
+    --sidebar-collapsed-width:  60px;
 
-    /* Soft premium shadows */
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-    --shadow-md: 0 4px 12px -2px rgba(0,0,0,0.06);
-    --shadow-lg: 0 8px 24px -4px rgba(0,0,0,0.08);
-    
-    --transition: all 0.2s ease;
+    --shadow-sm: 0 1px 2px rgba(15,23,42,0.05);
+    --shadow-md: 0 4px 12px -2px rgba(15,23,42,0.08);
+    --shadow-lg: 0 8px 24px -4px rgba(15,23,42,0.12);
+
+    --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
+
+    --transition: all 0.18s ease;
 }
 
-/* Force B2B theme across all options to ensure consistency */
+/* Global reset to ERP font + theme lock */
+*, *::before, *::after { box-sizing: border-box; }
 body, body.theme-midnight, body.theme-excel {
+    font-family: var(--font-sans);
     background-color: var(--main-bg);
     color: var(--text-main);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
 }
+
 
 /* App Structural Layout */
 .app-layout {
@@ -56,7 +70,7 @@ body, body.theme-midnight, body.theme-excel {
 .sidebar {
     width: var(--sidebar-width);
     background: var(--sidebar-bg);
-    color: #1e293b;
+    color: var(--sidebar-text);
     display: flex;
     flex-direction: column;
     position: fixed;
@@ -64,15 +78,16 @@ body, body.theme-midnight, body.theme-excel {
     bottom: 0;
     left: 0;
     z-index: 100;
-    border-right: 1px solid #bae6fd;
+    border-right: 1px solid rgba(255,255,255,0.05);
     transition: width 0.3s ease;
     overflow-x: hidden;
     overflow-y: auto;
 }
 
+
 .sidebar-header {
-    padding: 24px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 20px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
 }
 
 .sidebar-header .logo {
@@ -80,48 +95,53 @@ body, body.theme-midnight, body.theme-excel {
     align-items: center;
     gap: 12px;
     text-decoration: none;
-    color: #0f172a;
+    color: var(--sidebar-text-active);
 }
 
+
 .logo-box {
-    width: 36px;
-    height: 36px;
-    background: var(--accent-color);
+    width: 34px;
+    height: 34px;
+    background: var(--primary-color);
     border-radius: var(--radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 800;
-    font-size: 1.1rem;
-    color: #0f172a;
-    box-shadow: 0 0 12px var(--accent-color);
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #ffffff;
+    letter-spacing: 0.02em;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
 }
+
 
 .logo-text {
     display: flex;
     flex-direction: column;
-    line-height: 1.1;
+    line-height: 1.2;
 }
 
 .logo-text span {
-    font-weight: 700;
-    font-size: 1.15rem;
-    letter-spacing: -0.02em;
+    font-weight: 600;
+    font-size: 1rem;
+    color: #ffffff;
+    letter-spacing: 0;
 }
 
 .logo-text small {
-    font-size: 0.65rem;
-    opacity: 0.6;
-    letter-spacing: 0.05em;
+    font-size: 0.6rem;
+    color: var(--sidebar-text);
+    letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 
+
 .sidebar-links {
     flex: 1;
-    padding: 20px 14px;
+    padding: 16px 10px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     overflow-y: auto;
 }
 
@@ -129,11 +149,11 @@ body, body.theme-midnight, body.theme-excel {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 14px;
-    color: #334155;
+    padding: 9px 12px;
+    color: var(--sidebar-text);
     text-decoration: none;
-    font-weight: 500;
-    font-size: 0.88rem;
+    font-weight: 400;
+    font-size: 0.85rem;
     border-radius: var(--radius-sm);
     transition: var(--transition);
     white-space: nowrap;
@@ -141,60 +161,61 @@ body, body.theme-midnight, body.theme-excel {
 
 .sidebar svg,
 .sidebar-links a svg {
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    max-width: 20px;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    max-width: 18px;
     flex-shrink: 0;
 }
 
 .sidebar-links a svg {
-    opacity: 0.6;
+    opacity: 0.5;
     transition: var(--transition);
 }
 
 .sidebar-links a:hover {
     background: var(--sidebar-hover);
-    color: #0f172a;
+    color: #ffffff;
 }
 
 .sidebar-links a:hover svg {
-    opacity: 1;
+    opacity: 0.9;
     color: var(--accent-color);
 }
 
 .sidebar-links a.active {
-    background: var(--primary-color);
-    color: #0f172a;
+    background: var(--sidebar-active-bg);
+    color: #ffffff;
     font-weight: 600;
     position: relative;
 }
 
-/* Active pill indicator — blue left-border bar */
+/* Active indicator */
 .sidebar-links a.active::before {
     content: '';
     position: absolute;
     left: 0;
     top: 50%;
     transform: translateY(-50%);
-    width: 4px;
+    width: 3px;
     height: 60%;
-    background: var(--accent-color);
-    border-radius: 0 4px 4px 0;
+    background: rgba(255,255,255,0.7);
+    border-radius: 0 3px 3px 0;
 }
 
 .sidebar-links a.active svg {
     opacity: 1;
-    color: #0f172a;
+    color: #ffffff;
 }
 
+
 .sidebar-footer {
-    padding: 16px 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 14px 16px;
+    border-top: 1px solid rgba(255,255,255,0.07);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(0,0,0,0.1);
+    background: rgba(0,0,0,0.15);
 }
 
 .user-info {
@@ -205,20 +226,23 @@ body, body.theme-midnight, body.theme-excel {
 
 .user-info .username {
     font-weight: 600;
-    font-size: 0.9rem;
-    color: #0f172a;
+    font-size: 0.85rem;
+    color: #ffffff;
 }
 
 .user-info .role {
-    font-size: 0.7rem;
-    opacity: 0.5;
+    font-size: 0.65rem;
+    color: var(--sidebar-text);
     text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .logout-btn {
-    color: #0f172a;
+    color: var(--sidebar-text);
     transition: var(--transition);
 }
+
+
 
 .logout-btn:hover {
     color: var(--danger-color);
@@ -358,38 +382,50 @@ h3 { font-size: 1.25rem; }
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 14px 28px;
-    font-size: 1rem;
-    font-weight: 700;
-    border-radius: var(--radius-md);
+    padding: 10px 22px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    border-radius: var(--radius-sm);
     cursor: pointer;
     transition: var(--transition);
     border: none;
-    gap: 10px;
+    gap: 8px;
     text-decoration: none;
+    letter-spacing: 0.01em;
 }
 
 .btn-primary {
     background: var(--primary-color);
-    color: #0f172a;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(37,99,235,0.3);
 }
 
 .btn-primary:hover {
     background: var(--primary-hover);
     transform: translateY(-1px);
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 4px 12px rgba(37,99,235,0.4);
 }
 
 .btn-secondary {
-    background: var(--surface-alt);
-    color: var(--text-main);
+    background: var(--surface-color);
+    color: var(--text-secondary);
     border: 1px solid var(--border-color);
+}
+.btn-secondary:hover {
+    background: var(--surface-alt);
+    border-color: var(--border-strong);
 }
 
 .btn-accent {
     background: var(--accent-color);
-    color: #0f172a;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(59,130,246,0.3);
 }
+.btn-accent:hover {
+    background: var(--accent-hover);
+}
+
 
 /* --- Tables --- */
 .table-container {

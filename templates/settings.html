@@ -701,13 +701,13 @@
     async function checkMedusaStatus() {
         const badge = document.getElementById('medusa-status-badge');
         try {
-            const res = await fetch('/api/medusa/health');
+            const res = await fetch('/health');
             if (res.ok) {
                 badge.className = 'badge badge-success';
-                badge.textContent = 'Conectado a Medusa';
+                badge.textContent = 'Servicio Activo';
             } else {
                 badge.className = 'badge badge-danger';
-                badge.textContent = 'Desconectado / Error';
+                badge.textContent = 'Sin conexión';
             }
         } catch {
             badge.className = 'badge badge-danger';
