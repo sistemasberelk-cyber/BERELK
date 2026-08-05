@@ -127,24 +127,6 @@
 
     {% block scripts %}{% endblock %}
 
-    <!-- AI Widget Refined -->
-    <div id="ai-widget" style="position: fixed; bottom: 24px; right: 24px; z-index: 1000;">
-        <button id="ai-toggle" class="btn btn-primary" style="border-radius: 999px; box-shadow: var(--shadow-lg); padding: 12px 24px; background: var(--accent-color);">
-            ✨ Asistente IA
-        </button>
-        <div id="ai-panel" class="glass-card animate-fade-in" style="display:none; position: absolute; bottom: 80px; right: 0; width: 360px; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column; padding: 0; border: 1px solid var(--border-strong);">
-            <div style="padding: 16px; background: var(--primary-color); color: white; display:flex; justify-content: space-between; align-items: center;">
-                <div style="font-weight: 700;">VibeCloud Intelligence</div>
-                <button onclick="toggleAI(false)" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;">&times;</button>
-            </div>
-            <div id="ai-messages" style="padding: 16px; height: 320px; overflow-y: auto; font-size: 0.9rem; background: var(--surface-alt);"></div>
-            <div style="padding: 16px; border-top: 1px solid var(--border-color); background: var(--surface-color);">
-                <textarea id="ai-input" rows="2" placeholder="Pregunta sobre stock, ventas..." style="margin-bottom: 12px;"></textarea>
-                <button onclick="sendAI()" class="btn btn-primary" style="width: 100%;">Enviar Consulta</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         /* --- Sidebar Toggle (Mobile) --- */
         (function() {
@@ -166,55 +148,6 @@
             if (hamburger) hamburger.addEventListener('click', openSidebar);
             if (overlay) overlay.addEventListener('click', closeSidebar);
         })();
-
-        /* --- AI Widget --- */
-        function toggleAI(forceClose) {
-            const p = document.getElementById('ai-panel');
-            p.style.display = forceClose ? 'none' : (p.style.display === 'none' ? 'block' : 'none');
-        }
-        document.getElementById('ai-toggle').addEventListener('click', () => toggleAI());
-        document.getElementById('ai-input').addEventListener('keydown', (ev) => {
-            if (ev.key === 'Enter' && !ev.shiftKey) {
-                ev.preventDefault();
-                sendAI();
-            }
-        });
-        async function sendAI() {
-            const box = document.getElementById('ai-input');
-            const msg = box.value.trim();
-            if (!msg) return;
-            box.value = '';
-            appendAI('Tú', msg);
-            appendAI('...', 'Pensando...', true);
-            try {
-                const res = await fetch('/api/ai/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: msg })
-                });
-                if (!res.ok) throw new Error(await res.text());
-                const data = await res.json();
-                replaceLastAI(data.answer || 'Sin respuesta');
-            } catch (err) {
-                replaceLastAI('Error: ' + err.message);
-            }
-        }
-        function appendAI(from, text, isTemp=false) {
-            const wrap = document.getElementById('ai-messages');
-            const div = document.createElement('div');
-            div.className = 'ai-msg';
-            div.dataset.temp = isTemp ? '1' : '0';
-            div.innerHTML = `<strong>${from}:</strong> ${text}`;
-            wrap.appendChild(div);
-            wrap.scrollTop = wrap.scrollHeight;
-        }
-        function replaceLastAI(text) {
-            const wrap = document.getElementById('ai-messages');
-            const nodes = Array.from(wrap.querySelectorAll('.ai-msg'));
-            const temp = nodes.reverse().find(n => n.dataset.temp === '1');
-            if (temp) temp.innerHTML = `<strong>IA:</strong> ${text}`;
-            wrap.scrollTop = wrap.scrollHeight;
-        }
     </script>
 </body>
 </html>
