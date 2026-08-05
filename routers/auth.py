@@ -35,35 +35,30 @@ def login(
 ):
     user = session.exec(select(User).where(User.username == username)).first()
     
-    # 1. Fallback robusto garantizado:
-    is_override = False
-    if username == "admin" and password == "VibeCloudAdmin2026":
-        is_override = True
-    elif username == "superadmin" and password == "VibeCloudSuper2026":
-        is_override = True
-        
-    # 2. Revisar variables de entorno (sin espacios en blanco)
-    admin_override = os.getenv("ADMIN_PASSWORD")
-    superadmin_override = os.getenv("SUPERADMIN_PASSWORD")
-    
-    if username == "admin" and admin_override and password == str(admin_override).strip():
-        is_override = True
-    if username == "superadmin" and superadmin_override and password == str(superadmin_override).strip():
-        is_override = True
+    # 1. Eliminar fallbacks hardcodeados; usar estricta validación por entorno o hash DB
+    admin_email = os.getenv("ADMIN_EMAIL")
+    admin_password = os.getenv("ADMIN_PASSWORD")
 
-    # 3. Si no existe el usuario pero la contraseña maestra es correcta, crearlo
+    is_override = False
+    if admin_email and admin_password:
+        if username.strip() == admin_email.strip() and password.strip() == admin_password.strip():
+            is_override = True
+
+    # 2. Si no existe el usuario pero la credencial maestra de env es correcta, crearlo
     if not user and is_override:
         tenant_id = session.exec(select(Tenant.id).order_by(Tenant.id)).first() or 1
-        role = "superadmin" if username == "superadmin" else "admin"
+        role = "admin"
         user = User(
             username=username,
             password_hash=AuthService.get_password_hash(password),
             role=role,
             tenant_id=tenant_id,
+            is_active=True
         )
         session.add(user)
         session.commit()
         session.refresh(user)
+
 
     if not user or (not AuthService.verify_password(password, user.password_hash) and not is_override):
         return _templates().TemplateResponse(

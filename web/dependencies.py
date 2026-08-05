@@ -105,32 +105,22 @@ def get_current_tenant(
         except Exception:
             pass
 
-    # 3. Try to resolve via host subdomain
+    # 3. Try to resolve via host subdomain (valid for multi-tenant domains)
     host_tenant_id = _resolve_tenant_from_host(request.headers.get("host"), session)
     if host_tenant_id:
         host_tenant = session.get(Tenant, host_tenant_id)
         if host_tenant and host_tenant.is_active:
             return host_tenant.id
 
-    # 4. Try to resolve via verified tenant header
-    tenant_header = request.headers.get("x-tenant-id")
-    if tenant_header:
-        try:
-            tid = int(tenant_header)
-            header_tenant = session.get(Tenant, tid)
-            if header_tenant and header_tenant.is_active:
-                return header_tenant.id
-        except ValueError:
-            pass
+    # Strict check: in production environment, do NOT allow fallback or unauthenticated header overrides
+    is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
+    if is_production:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Autenticación requerida para resolver el tenant en producción"
+        )
 
-    # 5. Try to resolve via verified tenant subdomain header
-    subdomain_header = request.headers.get("x-tenant-subdomain")
-    if subdomain_header:
-        header_tenant = session.exec(select(Tenant).where(Tenant.subdomain == subdomain_header.lower())).first()
-        if header_tenant and header_tenant.is_active:
-            return header_tenant.id
-
-    # Fallback to the first active tenant to prevent app failures in dev/local environments
+    # Fallback to the first active tenant ONLY in development environment
     fallback_tenant = session.exec(select(Tenant).order_by(Tenant.id)).first()
     if fallback_tenant and fallback_tenant.is_active:
         return fallback_tenant.id
@@ -141,10 +131,12 @@ def get_current_tenant(
     )
 
 
+
 def require_superadmin(user: User = Depends(require_auth)) -> User:
-    if user.role != "admin" or user.tenant_id != 1:
-        raise HTTPException(status_code=403, detail="Superadmin required")
+    if not user or user.role != "superadmin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado. Se requiere rol superadmin.")
     return user
+
 
 
 def get_settings(

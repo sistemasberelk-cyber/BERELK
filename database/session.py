@@ -43,9 +43,13 @@ if SUPABASE_URL and SUPABASE_KEY:
          print(f"WARNING: Failed to init Supabase client: {e}")
 
 if not DATABASE_URL:
-    # Fallback/Dev config - ensure you have a .env file or set this env var
-    print("WARNING: DATABASE_URL not set. Database operations will fail.")
-    DATABASE_URL = "sqlite:///./test.db" # Fallback for local testing if env missing
+    is_production = os.getenv("ENVIRONMENT", "development").lower() == "production"
+    if is_production:
+        raise ValueError("CRÍTICO: DATABASE_URL es obligatoria en entorno de producción.")
+    else:
+        print("ADVERTENCIA: DATABASE_URL no configurada. Usando SQLite local (sqlite:///./test.db) para desarrollo.")
+        DATABASE_URL = "sqlite:///./test.db"
+
 
 # check_same_thread=False is needed only for SQLite
 # Add connect_timeout=10 to postgresql connection args to prevent hanging indefinitely

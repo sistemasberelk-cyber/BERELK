@@ -159,9 +159,35 @@ def bulk_update_price(data: BulkPriceUpdate, session: Session = Depends(get_sess
 async def import_products_excel(file: UploadFile = File(...), session: Session = Depends(get_session), tenant_id: int = Depends(get_tenant), user: User = Depends(require_auth)):
     SettingsService.ensure_admin(user)
     contents = await file.read()
-    ext = file.filename.split(".")[-1].lower()
-    df = pd.read_csv(io.BytesIO(contents)) if ext == "csv" else pd.read_excel(io.BytesIO(contents))
+    
+    # S2.3: Validate magic bytes / file signatures to prevent dangerous file uploads
+    # ZIP/XLSX: PK\x03\x04, OLE2 XLS: \xd0\xcf\x11\xe0, CSV/Text: printable ascii / utf-8
+    is_zip_xlsx = contents.startswith(b"PK\x03\x04")
+    is_ole_xls = contents.startswith(b"\xd0\xcf\x11\xe0")
+    
+    ext = (file.filename or "").split(".")[-1].lower()
+    
+    if ext in ["xlsx", "xls"]:
+        if not (is_zip_xlsx or is_ole_xls):
+            raise HTTPException(400, "El archivo subido no es un archivo Excel válido (firma inválida).")
+    elif ext == "csv":
+        try:
+            contents.decode("utf-8-sig")
+        except Exception:
+            try:
+                contents.decode("latin1")
+            except Exception:
+                raise HTTPException(400, "El archivo CSV no contiene un formato de texto válido.")
+    else:
+        raise HTTPException(400, "Formato de archivo no soportado. Debe ser .xlsx, .xls o .csv")
+
+    try:
+        df = pd.read_csv(io.BytesIO(contents)) if ext == "csv" else pd.read_excel(io.BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(400, f"Error al procesar el archivo: {str(e)}")
+
     df.columns = [c.lower().strip() for c in df.columns]
+
     processed, updated = 0, 0
     for _, row in df.iterrows():
         p_name = row.get("nombre") or row.get("name")

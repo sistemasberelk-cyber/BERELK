@@ -23,3 +23,16 @@ client_secret.json
 # IDEs
 .vscode/
 .idea/
+
+# Temp files & artifacts (Sprint 5.1)
+test_db.py
+fix_schema.py
+dump_db.py
+legacy_data/
+logs/
+old_pos.*
+full_system_export.txt
+crash.log
+e2e_production_readiness.py
+backup_pre_migracion.py
+

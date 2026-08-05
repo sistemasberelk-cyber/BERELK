@@ -177,22 +177,47 @@ async def lifespan(app: FastAPI):
     yield
 
 
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+    limiter = Limiter(key_func=get_remote_address, default_limits=[os.getenv("RATE_LIMIT_PUBLIC", "30/minute")])
+    HAS_SLOWAPI = True
+except ImportError:
+    limiter = None
+    HAS_SLOWAPI = False
+
 app = FastAPI(title="VibeCloud Cloud", lifespan=lifespan)
+if HAS_SLOWAPI:
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # CORS
 def _get_cors_origins() -> list[str]:
-    raw = os.getenv("CORS_ORIGINS", "http://localhost,http://127.0.0.1,https://vibecloud-frontend.onrender.com,https://vibecloud.onrender.com,https://sistemasberelk-cyber.github.io")
-    return [o.strip() for o in raw.split(",") if o.strip()] or ["http://localhost"]
+    env = os.getenv("ENVIRONMENT", "development").lower()
+    raw = os.getenv("CORS_ORIGINS", "")
+    if not raw:
+        if env == "production":
+            raw = "https://vibecloud-frontend.onrender.com,https://vibecloud.onrender.com"
+        else:
+            raw = "http://localhost,http://127.0.0.1,https://vibecloud-frontend.onrender.com"
+    origins = [o.strip() for o in raw.split(",") if o.strip()]
+    if env == "production":
+        unsafe = [o for o in origins if "localhost" in o or "127.0.0.1" in o]
+        if unsafe:
+            logger.warning(f"ADVERTENCIA DE SEGURIDAD: Orígenes no seguros detectados en CORS_ORIGINS en producción: {unsafe}")
+    return origins
 
 app.add_middleware(CORSMiddleware, allow_origins=_get_cors_origins(), allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
 
 from starlette.middleware.sessions import SessionMiddleware
 SESSION_SECRET = os.getenv("SECRET_KEY")
 if not SESSION_SECRET:
-    import logging
-    logging.getLogger(__name__).warning("SECRET_KEY env var not set. Using insecure fallback for SessionMiddleware.")
-    SESSION_SECRET = "fallback_insecure_secret_for_dev_only"
+    raise ValueError("SECRET_KEY es obligatoria en producción para SessionMiddleware.")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, same_site="lax")
+
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -213,9 +238,11 @@ app.include_router(auth_v1_router, prefix="/api/v1", tags=["Auth V1"])
 app.include_router(products_v1_router, prefix="/api/v1", tags=["Products V1"])
 app.include_router(sales_v1_router, prefix="/api/v1", tags=["Sales V1"])
 app.include_router(ui_config_v1_router, prefix="/api/v1/ui-config", tags=["UI Config V1"])
-app.include_router(ui_config_v1_router, prefix="/api/v1", tags=["UI Config V1"])
+app.include_router(ui_config_v1_router, prefix="/api/v1", tags=["UI Config V1 (Legacy)"], deprecated=True)
 app.include_router(inventory_v1_router, prefix="/api/v1/inventory", tags=["Inventory V1"])
 app.include_router(medusa_sync_v1_router, prefix="/api/v1", tags=["Medusa Sync V1"])
+
+
 
 app.include_router(ai_router)
 app.include_router(store_router)

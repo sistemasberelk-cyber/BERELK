@@ -32,37 +32,33 @@ class LogoutRequest(BaseModel):
 def login(req: LoginRequest, session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.username == req.username)).first()
     
-    # 1. Fallback robusto garantizado:
-    is_override = False
-    if req.username == "admin" and req.password == "VibeCloudAdmin2026":
-        is_override = True
-    elif req.username == "superadmin" and req.password == "VibeCloudSuper2026":
-        is_override = True
-        
-    # 2. Revisar variables de entorno
+    # 1. Eliminar fallbacks hardcodeados; usar estricta validación por entorno o hash DB
     import os
-    admin_override = os.getenv("ADMIN_PASSWORD")
-    superadmin_override = os.getenv("SUPERADMIN_PASSWORD")
-    if req.username == "admin" and admin_override and req.password == str(admin_override).strip():
-        is_override = True
-    if req.username == "superadmin" and superadmin_override and req.password == str(superadmin_override).strip():
-        is_override = True
+    admin_email = os.getenv("ADMIN_EMAIL")
+    admin_password = os.getenv("ADMIN_PASSWORD")
 
-    # 3. Crear usuario si no existe pero la clave maestra es correcta
+    is_override = False
+    if admin_email and admin_password:
+        if req.username.strip() == admin_email.strip() and req.password.strip() == admin_password.strip():
+            is_override = True
+
+    # 2. Crear usuario si no existe pero la clave maestra de env es correcta
     if not user and is_override:
         from database.models import Tenant
         from services.auth_service import AuthService
         tenant_id = session.exec(select(Tenant.id).order_by(Tenant.id)).first() or 1
-        role = "superadmin" if req.username == "superadmin" else "admin"
+        role = "admin"
         user = User(
             username=req.username,
             password_hash=AuthService.get_password_hash(req.password),
             role=role,
             tenant_id=tenant_id,
+            is_active=True
         )
         session.add(user)
         session.commit()
         session.refresh(user)
+
 
     if not user or not user.is_active or user.is_deleted:
         raise HTTPException(

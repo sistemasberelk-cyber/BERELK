@@ -4,8 +4,12 @@ import hashlib
 import os
 import secrets
 
-SECRET_KEY = os.environ.get("SECRET_KEY", "testsecretkey123")
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY es obligatoria en producción. No puede estar vacía o tener valor por defecto.")
+
 ALGORITHM = "HS256"
+
 
 def create_access_token(user_id: int, tenant_id: int, role: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=15)

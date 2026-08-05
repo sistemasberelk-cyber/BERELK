@@ -83,19 +83,58 @@ async def generate_theme(req: ThemeRequest, db: Session = Depends(get_session), 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error parseando tema: {str(e)}")
 
+import logging
+logger = logging.getLogger(__name__)
+
+# Basic in-memory rate limiting for AI calls per tenant
+_AI_CALL_LOGS: Dict[int, list] = {}
+
+def _check_ai_rate_limit(tenant_id: int):
+    import time
+    limit = int(os.getenv("AI_RATE_LIMIT_PER_HOUR", "20"))
+    now = time.time()
+    cutoff = now - 3600
+    
+    tenant_calls = _AI_CALL_LOGS.get(tenant_id, [])
+    # Filter calls in last hour
+    recent_calls = [t for t in tenant_calls if t > cutoff]
+    
+    if len(recent_calls) >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Límite de cuota de IA alcanzado ({limit} peticiones/hora)."
+        )
+    
+    recent_calls.append(now)
+    _AI_CALL_LOGS[tenant_id] = recent_calls
+
 @router.get("/onboarding/texts")
-async def get_onboarding_texts(step: str, niche: str = "general", db: Session = Depends(get_session)):
+async def get_onboarding_texts(
+    step: str,
+    niche: str = "general",
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Autenticación requerida.")
+    if current_user.tenant_id:
+        _check_ai_rate_limit(current_user.tenant_id)
+
     if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API Key no configurada en el backend.")
+        raise HTTPException(status_code=500, detail="Servicio de IA no configurado.")
     try:
         texts = await GeminiService.generate_onboarding_text(step, niche, GEMINI_API_KEY)
         return texts
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error en AI onboarding/texts: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servicio de IA")
 
 @router.post("/image")
 async def generate_image(req: ImageRequest, db: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
-    # Simulación de generación de imagen (Gemini Imagen 4 Fast o Vertex AI)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Autenticación requerida.")
+    if current_user.tenant_id:
+        _check_ai_rate_limit(current_user.tenant_id)
     return {"success": True, "image_url": "https://placehold.co/600x400/png?text=Generated+Image"}
 
 class ProductDescRequest(BaseModel):
@@ -103,14 +142,24 @@ class ProductDescRequest(BaseModel):
     features: str
 
 @router.post("/product-description")
-async def generate_product_description(req: ProductDescRequest, db: Session = Depends(get_session)):
+async def generate_product_description(
+    req: ProductDescRequest,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Autenticación requerida.")
+    if current_user.tenant_id:
+        _check_ai_rate_limit(current_user.tenant_id)
+
     if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API Key no configurada.")
+        raise HTTPException(status_code=500, detail="Servicio de IA no configurado.")
     try:
         desc = await GeminiService.generate_product_description(req.product_name, req.features, GEMINI_API_KEY)
         return {"success": True, "description": desc}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error en AI product-description: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servicio de IA")
 
 class LandingCopyRequest(BaseModel):
     niche: str
@@ -118,14 +167,24 @@ class LandingCopyRequest(BaseModel):
     tone: str
 
 @router.post("/landing-copy")
-async def generate_landing_copy(req: LandingCopyRequest, db: Session = Depends(get_session)):
+async def generate_landing_copy(
+    req: LandingCopyRequest,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Autenticación requerida.")
+    if current_user.tenant_id:
+        _check_ai_rate_limit(current_user.tenant_id)
+
     if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API Key no configurada.")
+        raise HTTPException(status_code=500, detail="Servicio de IA no configurado.")
     try:
         copy = await GeminiService.generate_landing_copy(req.niche, req.audience, req.tone, GEMINI_API_KEY)
         return {"success": True, "copy": copy}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error en AI landing-copy: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servicio de IA")
 
 class ChatRequest(BaseModel):
     history: list
@@ -133,14 +192,25 @@ class ChatRequest(BaseModel):
     system_instruction: str = "Eres un asistente virtual de ventas amable."
 
 @router.post("/chat")
-async def chat_bot_response(req: ChatRequest, db: Session = Depends(get_session)):
+async def chat_bot_response(
+    req: ChatRequest,
+    db: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user)
+):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Autenticación requerida.")
+    if current_user.tenant_id:
+        _check_ai_rate_limit(current_user.tenant_id)
+
     if not GEMINI_API_KEY:
-        raise HTTPException(status_code=500, detail="Gemini API Key no configurada.")
+        raise HTTPException(status_code=500, detail="Servicio de IA no configurado.")
     try:
         response_text = await GeminiService.chat_bot_response(req.history, req.new_message, req.system_instruction, GEMINI_API_KEY)
         return {"success": True, "response": response_text}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error en AI chat: {e}")
+        raise HTTPException(status_code=500, detail="Error interno del servicio de IA")
+
 
 @router.post("/alex-io")
 async def alex_io_chat(
