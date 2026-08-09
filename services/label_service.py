@@ -47,8 +47,12 @@ class LabelService:
             )
         ).all()
         
+        p_map = {p.id: p for p in products}
         labels_data = []
-        for p in products:
+        for pid in product_ids:
+            p = p_map.get(pid)
+            if not p:
+                continue
             bc_file = LabelService.ensure_barcode_image(str(p.barcode or "").strip())
             if not bc_file:
                 continue
@@ -63,3 +67,4 @@ class LabelService:
                 "item_number": p.item_number
             })
         return labels_data
+

@@ -8,7 +8,7 @@ import barcode
 from barcode import Code128
 from barcode.writer import ImageWriter
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, Query
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select, col
 from database.models import Product, Settings, User
@@ -231,21 +231,74 @@ def download_import_template(type: str, user: User = Depends(require_auth)):
 from services.label_service import LabelService
 
 @router.post("/print/labels/generate")
-def print_labels_v2(request: Request, selected_items: str = Form(...), layout_type: str = Form(...), hide_price: Optional[str] = Form(None), settings: Settings = Depends(get_settings), session: Session = Depends(get_session), tenant_id: int = Depends(get_tenant)):
-    allowed = {"exhibition", "list", "100x50", "90x60", "100x60", "100x65", "55x44"}
-    if layout_type not in allowed: raise HTTPException(400, "Invalid layout type")
+@router.post("/products/labels/print")
+async def print_labels_v2(
+    request: Request,
+    selected_items: Optional[str] = Form(None),
+    selected_products: List[int] = Form(default=[]),
+    layout_type: str = Form("100x50"),
+    hide_price: Optional[str] = Form(None),
+    settings: Settings = Depends(get_settings),
+    session: Session = Depends(get_session),
+    tenant_id: int = Depends(get_tenant)
+):
+    allowed = {"exhibition", "list", "100x50", "90x60", "100x60", "100x65", "55x44", "standard"}
+    if layout_type not in allowed:
+        raise HTTPException(400, "Invalid layout type")
+    
     should_hide = hide_price and str(hide_price).lower() in ["true", "on", "1", "yes"]
-    if len(selected_items) > 20_000: raise HTTPException(400, "Payload too large")
-    try: item_ids = json.loads(selected_items)
-    except Exception: raise HTTPException(400, "Invalid JSON")
-    if not isinstance(item_ids, list): raise HTTPException(400, "Must be array")
-    validated = list(dict.fromkeys(int(i) for i in item_ids if int(i) > 0))[:500]
-    if not validated: raise HTTPException(400, "No products selected")
+    
+    validated: List[int] = []
+    form_data = await request.form()
+    
+    if selected_items:
+        if len(selected_items) > 20_000:
+            raise HTTPException(400, "Payload too large")
+        try:
+            item_ids = json.loads(selected_items)
+        except Exception:
+            raise HTTPException(400, "Invalid JSON")
+        if not isinstance(item_ids, list):
+            raise HTTPException(400, "Must be array")
+        for i in item_ids:
+            try:
+                val = int(i)
+                if val > 0:
+                    validated.append(val)
+            except (ValueError, TypeError):
+                pass
+    else:
+        p_list = selected_products or [int(x) for x in form_data.getlist("selected_products") if str(x).isdigit()]
+        for pid in p_list:
+            try:
+                val = int(pid)
+                if val > 0:
+                    qty_str = form_data.get(f"qty_{val}", "1")
+                    try:
+                        qty = max(1, min(100, int(str(qty_str))))
+                    except ValueError:
+                        qty = 1
+                    validated.extend([val] * qty)
+            except (ValueError, TypeError):
+                pass
+                
+    validated = validated[:500]
+    if not validated:
+        raise HTTPException(400, "No products selected")
     
     labels_data = LabelService.prepare_labels_data(session, tenant_id, validated)
     
-    if not labels_data: raise HTTPException(422, "No valid labels")
-    tpl_map = {"exhibition": "print_layout_exhibition.html", "100x50": "labels_100x50.html", "100x60": "labels_100x60.html", "100x65": "labels_100x65.html", "90x60": "labels_90x60.html"}
+    if not labels_data:
+        raise HTTPException(422, "No valid labels")
+        
+    tpl_map = {
+        "exhibition": "print_layout_exhibition.html",
+        "100x50": "labels_100x50.html",
+        "100x60": "labels_100x60.html",
+        "100x65": "labels_100x65.html",
+        "90x60": "labels_90x60.html"
+    }
+    
     if layout_type in tpl_map:
         return _templates().TemplateResponse(tpl_map[layout_type], {"request": request, "labels": labels_data, "hide_price": should_hide})
     elif layout_type == "list":
@@ -253,3 +306,8 @@ def print_labels_v2(request: Request, selected_items: str = Form(...), layout_ty
         return HTMLResponse(f"<html><body style='font-family:sans-serif'><h2>Lista de Precios</h2><table border=1 cellspacing=0 cellpadding=5 style='width:100%'><tr><th>Art #</th><th>Producto</th><th>Precio</th></tr>{rows}</table><script>window.print()</script></body></html>")
     else:
         return _templates().TemplateResponse("print_layout.html", {"request": request, "labels": labels_data, "w": 55 if layout_type == "55x44" else settings.label_width_mm, "h": 44 if layout_type == "55x44" else settings.label_height_mm, "hide_price": should_hide})
+
+@router.get("/products/labels/print")
+def get_labels_print_redirect():
+    return RedirectResponse(url="/products/labels", status_code=303)
+
