@@ -9,10 +9,12 @@ import json
 import httpx
 from database.session import get_session
 from database.models import User, Tenant
-from web.dependencies import get_current_user, get_current_tenant
+from web.dependencies import get_current_user, get_current_tenant, require_auth
 from services.gemini_service import GeminiService
-import re
+import re, logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI Services"])
 
@@ -30,15 +32,15 @@ class ImageRequest(BaseModel):
     prompt: str
 
 @router.post("/copy")
-async def generate_copy(req: CopyRequest, db: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
+async def generate_copy(req: CopyRequest, db: Session = Depends(get_session), current_user: User = Depends(require_auth)):
+    if current_user.tenant_id:
+        _check_ai_rate_limit(current_user.tenant_id)
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=500, detail="Gemini API Key no configurada en el backend.")
     
-    # Simple prompt for Gemini 2.5 Flash-Lite
     prompt = f"Genera 3 opciones de copy de ventas persuasivo para el producto '{req.product_name}'. Categoría: {req.category}. Contexto extra: {req.context}. Devuelve solo los textos numerados."
     
     try:
-        # Pseudo-code for Gemini REST API call
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}",
@@ -48,10 +50,13 @@ async def generate_copy(req: CopyRequest, db: Session = Depends(get_session), cu
             text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
             return {"success": True, "copies": text.split("\n")}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error generando copy: {e}")
+        raise HTTPException(status_code=500, detail="Error interno al generar copy de ventas.")
 
 @router.post("/theme")
-async def generate_theme(req: ThemeRequest, db: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
+async def generate_theme(req: ThemeRequest, db: Session = Depends(get_session), current_user: User = Depends(require_auth)):
+    if current_user.tenant_id:
+        _check_ai_rate_limit(current_user.tenant_id)
     if not GEMINI_API_KEY:
         raise HTTPException(status_code=500, detail="Gemini API Key no configurada.")
     
@@ -76,12 +81,13 @@ async def generate_theme(req: ThemeRequest, db: Session = Depends(get_session), 
             )
             data = resp.json()
             text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-            # Limpiar posible texto extra
             text = text.replace('```json', '').replace('```', '').strip()
             theme_json = json.loads(text)
             return {"success": True, "theme": theme_json}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error parseando tema: {str(e)}")
+        logger.error(f"Error generando tema: {e}")
+        raise HTTPException(status_code=500, detail="Error interno al generar paleta de colores.")
+
 
 import logging
 logger = logging.getLogger(__name__)

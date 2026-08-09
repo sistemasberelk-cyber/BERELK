@@ -80,10 +80,26 @@ def get_products_api(session: Session = Depends(get_session), user: User = Depen
         res.append(d)
     return res
 
+def validate_image_magic_bytes(upload_file: UploadFile) -> None:
+    if not upload_file or not upload_file.filename:
+        return
+    header = upload_file.file.read(512)
+    upload_file.file.seek(0)
+    valid_signatures = [
+        b'\xff\xd8\xff',       # JPEG
+        b'\x89PNG\r\n\x1a\n',   # PNG
+        b'GIF87a', b'GIF89a',  # GIF
+        b'RIFF',               # WEBP
+        b'BM'                  # BMP
+    ]
+    if not any(header.startswith(sig) for sig in valid_signatures):
+        raise HTTPException(400, "El archivo subido no es una imagen válida.")
+
 @router.post("/api/products")
 def create_product_api(name: str = Form(...), price: float = Form(...), stock: int = Form(...), description: Optional[str] = Form(None), barcode_val: Optional[str] = Form(None, alias="barcode"), category: Optional[str] = Form(None), item_number: Optional[str] = Form(None), cant_bulto: Optional[int] = Form(None), numeracion: Optional[str] = Form(None), price_bulk: Optional[float] = Form(None), price_retail: Optional[float] = Form(None), image: Optional[UploadFile] = File(None), session: Session = Depends(get_session), user: User = Depends(require_auth), tenant_id: int = Depends(get_tenant)):
     product = Product(tenant_id=tenant_id, name=name, price=price, description=description, barcode=barcode_val or "", category=category, item_number=item_number, cant_bulto=cant_bulto, numeracion=numeracion, price_bulk=price_bulk, price_retail=price_retail)
     if image and image.filename:
+        validate_image_magic_bytes(image)
         ext = image.filename.split(".")[-1]
         filename = f"{uuid.uuid4()}.{ext}"
         file_location = f"static/product_images/{filename}"
@@ -110,6 +126,7 @@ def update_product_api(id: int, name: str = Form(...), price: float = Form(...),
     product.price_bulk, product.price_retail = price_bulk, price_retail
     if barcode_val: product.barcode = barcode_val
     if image and image.filename:
+        validate_image_magic_bytes(image)
         ext = image.filename.split(".")[-1]
         filename = f"{uuid.uuid4()}.{ext}"
         file_location = f"static/product_images/{filename}"
@@ -119,6 +136,7 @@ def update_product_api(id: int, name: str = Form(...), price: float = Form(...),
     session.add(product)
     session.commit()
     return product
+
 
 @router.delete("/api/products/{id}")
 def delete_product_api(id: int, session: Session = Depends(get_session), user: User = Depends(require_auth), tenant_id: int = Depends(get_tenant)):

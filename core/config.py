@@ -41,3 +41,8 @@ except ImportError:
         STOREFRONT_URL = os.getenv("STOREFRONT_URL", "http://localhost:3000")
 
 settings = Settings()
+
+if os.getenv("ENVIRONMENT", "development").lower() == "production":
+    if not settings.SECRET_KEY or len(settings.SECRET_KEY) < 32:
+        raise ValueError("SECRET_KEY debe tener al menos 32 caracteres en producción por razones de seguridad.")
+

@@ -41,140 +41,14 @@ from routers.ai import router as ai_router
 from routers.superadmin import router as superadmin_router
 from routers.store import router as store_router
 
-def setup_logging():
-    handlers = []
-    formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
-    
-    try:
-        os.makedirs('logs', exist_ok=True)
-        logHandler = logging.FileHandler(filename='logs/vibecloud.log')
-        logHandler.setFormatter(formatter)
-        handlers.append(logHandler)
-    except Exception:
-        pass  # File logging not available (e.g. read-only filesystem on Render)
-    
-    streamHandler = logging.StreamHandler()
-    streamHandler.setFormatter(formatter)
-    handlers.append(streamHandler)
-    
-    logging.basicConfig(level=logging.INFO, handlers=handlers)
+from core.logging_config import setup_logging
+from core.startup import lifespan
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
-from sqlalchemy import text
-
-def ensure_schema_compatibility(session: Session):
-    """
-    DEPRECATED: This block is deprecated and has been removed to speed up boot.
-    """
-    pass
-
 templates = CompatTemplates(directory="templates")
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Run migrations on startup
-    try:
-        from alembic import command
-        from alembic.config import Config
-        alembic_cfg = Config("alembic.ini")
-        # Ensure url is set from env
-        db_url = os.getenv("DATABASE_URL")
-        if db_url:
-            alembic_cfg.set_main_option("sqlalchemy.url", db_url)
-        command.upgrade(alembic_cfg, "head")
-        logger.info("Alembic migrations completed successfully.")
-    except Exception as e:
-        logger.error(f"Alembic migration failed: {e}")
-        # Fallback to simple table creation if alembic fails
-        try:
-            create_db_and_tables()
-        except Exception as e2:
-            logger.error(f"Fallback create_db_and_tables also failed: {e2}")
-
-    # Ensure storefront_template column exists in settings
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE settings ADD COLUMN storefront_template VARCHAR DEFAULT 'elegante'"))
-            conn.commit()
-    except Exception:
-        pass  # Column likely already exists
-
-    # Ensure ai_tier and ai_credits columns exist in tenant
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE tenant ADD COLUMN ai_tier VARCHAR DEFAULT 'free'"))
-            conn.execute(text("ALTER TABLE tenant ADD COLUMN ai_credits INTEGER DEFAULT 100"))
-            conn.commit()
-    except Exception:
-        pass  # Columns likely already exist
-
-    # Ensure medusa_product_id column exists in product (added after initial deploy)
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE product ADD COLUMN IF NOT EXISTS medusa_product_id VARCHAR"))
-            conn.execute(text(
-                "CREATE INDEX IF NOT EXISTS ix_product_medusa_product_id "
-                "ON product (medusa_product_id)"
-            ))
-            conn.commit()
-        logger.info("medusa_product_id column ensured in product table.")
-    except Exception as e:
-        logger.warning(f"medusa_product_id migration skipped (non-fatal): {e}")
-
-    # Ensure client_id column exists in user table (added for B2B client portal)
-    try:
-        with engine.connect() as conn:
-            conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS client_id INTEGER'))
-            conn.commit()
-        logger.info("client_id column ensured in user table.")
-    except Exception as e:
-        logger.warning(f"user.client_id migration skipped (non-fatal): {e}")
-
-    # Ensure credit & tax columns exist in client table
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS credit_limit NUMERIC(12, 2)"))
-            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS credit_enabled BOOLEAN DEFAULT FALSE"))
-            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS razon_social VARCHAR"))
-            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS cuit VARCHAR"))
-            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS iva_category VARCHAR"))
-            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS transport_name VARCHAR"))
-            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS transport_address VARCHAR"))
-            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE"))
-            conn.execute(text("ALTER TABLE client ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE"))
-            conn.commit()
-        logger.info("client table columns ensured.")
-    except Exception as e:
-        logger.warning(f"client columns migration skipped (non-fatal): {e}")
-
-
-
-
-    try:
-        with Session(engine) as session:
-            try:
-                AuthService.create_default_user_and_settings(session)
-            except Exception as e:
-                session.rollback()
-                logger.error(f"AuthService setup failed (non-fatal): {e}")
-            if os.getenv("SEED_ON_START") == "1":
-                seed_products(session)
-    except Exception as e:
-        logger.error(f"Session setup failed (non-fatal): {e}")
-
-    # Start background daily theme scheduler
-    try:
-        import asyncio
-        from web.scheduler import theme_scheduler_loop
-        asyncio.ensure_future(theme_scheduler_loop())
-        logger.info("Theme scheduler started.")
-    except Exception as e:
-        logger.error(f"Theme scheduler failed to start (non-fatal): {e}")
-
-    yield
 
 
 try:

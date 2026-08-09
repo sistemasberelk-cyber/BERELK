@@ -2,6 +2,8 @@
 fastapi==0.109.2
 uvicorn[standard]==0.30.0
 sqlmodel==0.0.22
+pydantic-settings
+slowapi
 python-multipart
 jinja2<3.2.0
 python-barcode
@@ -20,4 +22,4 @@ alembic
 pytest
 pyjwt==2.11.0
 httpx
-python-json-logger
+python-json-logger
