@@ -196,7 +196,8 @@ def fix_db(session: Session = Depends(get_session), user: User = Depends(require
             session.commit()
             results.append({"stmt": stmt, "status": "success"})
         except Exception as e:
-            session.rollback()
+            if hasattr(session, "rollback"):
+                session.rollback()
             results.append({"stmt": stmt, "status": "error", "message": str(e)})
             
     # Try Alembic manually
