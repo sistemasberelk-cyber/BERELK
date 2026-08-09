@@ -248,58 +248,80 @@ function updateCart() {
     const tbody = document.getElementById('cart-body');
     let total = 0;
 
-    if (cart.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; padding: 60px; color: var(--text-muted);"><div style="font-size: 3rem; margin-bottom: 16px; opacity: 0.2;">🛒</div>El carrito está vacío</td></tr>`;
+    if (!cart || cart.length === 0) {
+        tbody.innerHTML = `
+            <div class="pos-cart-empty" id="cart-empty-state">
+                <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" fill="none" viewBox="0 0 24 24" stroke-width="1" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z"/></svg>
+                <p>El carrito está vacío</p>
+            </div>`;
         document.getElementById('cart-total').innerText = '$0.00';
         return;
     }
 
-    tbody.innerHTML = cart.map(item => {
-        const unitPrice = parseFloat(item.unit_price || 0);
-        const lineTotal = unitPrice * item.quantity;
+    tbody.innerHTML = cart.map((item, idx) => {
+        const unitPrice = parseFloat(item.unit_price || item.price || 0);
+        const qty = item.quantity !== undefined ? item.quantity : (item.qty || 1);
+        const lineTotal = unitPrice * qty;
         total += lineTotal;
+        const key = item.line_key || idx;
+        const formattedUnitPrice = unitPrice.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        const formattedTotal = lineTotal.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
         return `
-        <tr>
-            <td>
-                <div style="font-weight: 700;">${item.product_name}</div>
-                <div style="font-size: 0.75rem; color: var(--text-muted);">
-                    ${item.item_number ? `#${item.item_number} | ` : ''}
-                    <span style="color: var(--accent-color); font-weight: 700;">${item.price_type}</span>
+        <div class="cart-line">
+            <div>
+                <div class="cart-line-name" style="font-weight: 700; color: var(--text-main); font-size: 0.9rem;">${item.product_name || item.name}</div>
+                <div class="cart-line-sub" style="font-size: 0.75rem; color: var(--primary-color); font-weight: 600;">${item.price_type || item.priceKey || ''}</div>
+            </div>
+            <div style="font-weight: 600; color: var(--text-muted); font-size: 0.85rem;">
+                ${item.item_number ? '#' + item.item_number : '-'}
+            </div>
+            <div style="display: flex; justify-content: center;">
+                <div class="cart-qty-ctrl">
+                    <button onclick="updateItemQty('${key}', -1)">−</button>
+                    <span style="font-weight: 800; padding: 0 6px;">${qty}</span>
+                    <button onclick="updateItemQty('${key}', 1)">+</button>
                 </div>
-                <div style="display: flex; align-items: center; gap: 12px; margin-top: 8px;">
-                    <button onclick="updateItemQty('${item.line_key}', -1)" class="btn-secondary" style="width: 28px; height: 28px; border-radius: 6px; padding: 0;">-</button>
-                    <span style="font-weight: 800;">${item.quantity}</span>
-                    <button onclick="updateItemQty('${item.line_key}', 1)" class="btn-secondary" style="width: 28px; height: 28px; border-radius: 6px; padding: 0;">+</button>
-                </div>
-            </td>
-            <td style="text-align: right; font-weight: 600;">$${unitPrice.toFixed(2)}</td>
-            <td style="text-align: right; font-weight: 800; color: var(--primary-color);">$${lineTotal.toFixed(2)}</td>
-            <td style="width: 40px; text-align: right;">
-                <button onclick="removeFromCart('${item.line_key}')" style="background:none; border:none; color: var(--danger-color); cursor:pointer; font-size: 1.25rem;">&times;</button>
-            </td>
-        </tr>
+            </div>
+            <div class="cart-line-price" style="text-align: right; font-weight: 600; color: var(--text-main); font-size: 0.9rem;">$${formattedUnitPrice}</div>
+            <div class="cart-line-total" style="text-align: right; font-weight: 800; color: var(--primary-color); font-size: 0.95rem;">$${formattedTotal}</div>
+            <div style="display: flex; justify-content: flex-end;">
+                <button class="cart-remove" onclick="removeFromCart('${key}')" title="Quitar" style="background:none; border:none; color: var(--text-muted); cursor:pointer; font-size: 1.1rem; padding: 4px; border-radius: 4px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+        </div>
         `;
     }).join('');
 
-    document.getElementById('cart-total').innerText = '$' + total.toFixed(2);
-    saveCartState();
+    document.getElementById('cart-total').innerText = '$' + total.toLocaleString('es-AR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    if (typeof saveCartState === 'function') saveCartState();
 }
 
 
 function updateItemQty(lineKey, delta) {
-    const item = cart.find(i => i.line_key === lineKey);
+    let item = cart.find(i => i.line_key === lineKey || i.line_key == lineKey);
+    if (!item && typeof lineKey === 'number') item = cart[lineKey];
     if (!item) return;
-    const newQty = item.quantity + delta;
+    const currentQty = item.quantity !== undefined ? item.quantity : item.qty;
+    const newQty = currentQty + delta;
     if (newQty > 0) {
-        item.quantity = newQty;
-        updateCart();
+        if (item.quantity !== undefined) item.quantity = newQty;
+        if (item.qty !== undefined) item.qty = newQty;
+    } else {
+        removeFromCart(lineKey);
+        return;
     }
+    updateCart();
 }
 
 function removeFromCart(lineKey) {
-    cart = cart.filter(i => i.line_key !== lineKey);
+    if (typeof lineKey === 'number') {
+        cart.splice(lineKey, 1);
+    } else {
+        cart = cart.filter(i => i.line_key !== lineKey && i.line_key != lineKey);
+    }
     updateCart();
-    saveCartState();
 }
 
 function openCheckoutModal() {

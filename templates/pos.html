@@ -256,7 +256,7 @@
 
 .pos-cart-head {
     display: grid;
-    grid-template-columns: 1fr 90px 90px 80px 40px;
+    grid-template-columns: 2fr 100px 110px 110px 120px 40px;
     padding: 10px 20px;
     background: var(--surface-alt);
     border-bottom: 1px solid var(--border-color);
@@ -265,6 +265,7 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-muted);
+    align-items: center;
 }
 
 .pos-cart-body {
@@ -292,7 +293,7 @@
 /* Cart line item */
 .cart-line {
     display: grid;
-    grid-template-columns: 1fr 90px 90px 80px 40px;
+    grid-template-columns: 2fr 100px 110px 110px 120px 40px;
     align-items: center;
     padding: 12px 20px;
     border-bottom: 1px solid var(--border-color);
@@ -462,8 +463,9 @@
         <div class="pos-cart-wrap">
             <div class="pos-cart-head">
                 <span>Producto</span>
-                <span>Cant.</span>
-                <span style="text-align:right">Precio</span>
+                <span>Artículo</span>
+                <span style="text-align:center">Cant.</span>
+                <span style="text-align:right">Precio Unit.</span>
                 <span style="text-align:right">Total</span>
                 <span></span>
             </div>
@@ -576,53 +578,8 @@
     };
 
     /* ── OVERRIDE: render cart as structured rows ── */
-    const _origRenderCart = window.renderCart;
     window.renderCart = function() {
-        const body   = document.getElementById('cart-body');
-        const empty  = document.getElementById('cart-empty-state');
-        const totalEl = document.getElementById('cart-total');
-
-        if (!cart || cart.length === 0) {
-            body.innerHTML = '';
-            body.appendChild(empty || (() => {
-                const d = document.createElement('div');
-                d.className = 'pos-cart-empty';
-                d.id = 'cart-empty-state';
-                d.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" fill="none" viewBox="0 0 24 24" stroke-width="1" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z"/></svg><p>El carrito está vacío</p>`;
-                return d;
-            })());
-            if (totalEl) totalEl.textContent = '$0.00';
-            return;
-        }
-
-        let total = 0;
-        body.innerHTML = cart.map((item, idx) => {
-            const lineTotal = item.qty * item.price;
-            total += lineTotal;
-            const price  = parseFloat(item.price).toLocaleString('es-AR', {style:'currency',currency:'ARS'});
-            const lTotal = lineTotal.toLocaleString('es-AR', {style:'currency',currency:'ARS'});
-            return `
-            <div class="cart-line">
-                <div>
-                    <div class="cart-line-name">${item.name}</div>
-                    <div class="cart-line-sub">${item.priceKey && item.priceKey !== 'price' ? item.priceKey : ''}</div>
-                </div>
-                <div>
-                    <div class="cart-qty-ctrl">
-                        <button onclick="changeQty(${idx},-1)">−</button>
-                        <span>${item.qty}</span>
-                        <button onclick="changeQty(${idx},1)">+</button>
-                    </div>
-                </div>
-                <div class="cart-line-price">${price}</div>
-                <div class="cart-line-total">${lTotal}</div>
-                <button class="cart-remove" onclick="removeFromCart(${idx})" title="Quitar">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
-                </button>
-            </div>`;
-        }).join('');
-
-        if (totalEl) totalEl.textContent = total.toLocaleString('es-AR', {style:'currency',currency:'ARS'});
+        if (typeof updateCart === 'function') updateCart();
     };
 
     /* Helpers referenced by new cart rows */
